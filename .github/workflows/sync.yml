@@ -1,0 +1,71 @@
+name: Sync Upstream Daily
+
+on:
+  schedule:
+    - cron: '0 0,9,17 * * *' # Runs every day at 12:00 AM, 9:00 AM, and 5:00 PM UTC
+  workflow_dispatch: # Enables manual trigger targeting master directly
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master branch
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0 # Fetches full history for proper alignment
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream repository
+        run: |
+          git remote add upstream https://github.com/backslashxx/KernelSU.git
+          git fetch upstream
+
+      - name: Sync and Align History
+        run: |
+          UPSTREAM_BRANCH="master"
+          if git show-ref --quiet refs/remotes/upstream/main; then
+            UPSTREAM_BRANCH="main"
+          fi
+
+          echo "Comparing local master with upstream/$UPSTREAM_BRANCH..."
+
+          # Check if upstream commits are already fully present in local master
+          if git merge-base --is-ancestor upstream/$UPSTREAM_BRANCH HEAD; then
+            echo "✅ master is already up to date. Skipping sync."
+            echo "SYNC_NEEDED=false" >> $GITHUB_ENV
+          else
+            echo "🔄 Upstream has new changes. Aligning master perfectly with upstream..."
+            
+            # Wipes out any divergent history/commits and mirrors upstream exactly
+            git reset --hard upstream/$UPSTREAM_BRANCH
+            
+            echo "SYNC_NEEDED=true" >> $GITHUB_ENV
+          fi
+
+      - name: Push updates
+        if: env.SYNC_NEEDED == 'true'
+        run: |
+          # Force pushing ensures any broken history/accidental commits on your master are cleaned out
+          git push origin master --force
+
+      - name: Send merge notification to Telegram
+        if: env.SYNC_NEEDED == 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # Grab the absolute latest commit message brought over from upstream
+          MESSAGE=$(git log -1 --pretty=%B)
+          
+          ENCODED_MESSAGE=$(echo "$MESSAGE" | python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.stdin.read()))")
+          
+          curl -s -X POST https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage \
+            -d chat_id=$TELEGRAM_CHAT_ID \
+            -d text="✅ *Sync Complete on master branch:*%0A$ENCODED_MESSAGE" \
+            -d parse_mode=Markdown
+            
