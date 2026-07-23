@@ -69,19 +69,16 @@ jobs:
           HASH=$(sha256sum pr-cert.der | awk '{print $1}')
           echo "expected_hash=$HASH" >> $GITHUB_OUTPUT
 
-          echo "Certificate size: $SIZE_HEX ($SIZE_DEC bytes)"
-          echo "Certificate hash: $HASH"
-
   build-lkm:
     needs: generate-key
-    uses: ./.github/workflows/build-lkm.yml
+    uses: Justadeayo/KernelSU/.github/workflows/build-lkm@master
     with:
       expected_size2: ${{ needs.generate-key.outputs.expected_size || '' }}
       expected_hash2: ${{ needs.generate-key.outputs.expected_hash || '' }}
     secrets: inherit
 
   build-ksuinit:
-    uses: ./.github/workflows/ksuinit.yml
+    uses: Justadeayo/KernelSU/.github/workflows/ksuinit@master
 
   build-ksud:
     needs: [build-lkm, build-ksuinit]
@@ -97,7 +94,7 @@ jobs:
             pack_lkm: false
             pack_ksuinit: false
 
-    uses: ./.github/workflows/ksud.yml
+    uses: Justadeayo/KernelSU/.github/workflows/ksud@master
     with:
       target: ${{ matrix.target }}
       pack_lkm: ${{ matrix.pack_lkm }}
@@ -112,9 +109,11 @@ jobs:
         working-directory: ./manager
 
     steps:
-      - name: Checkout
+      - name: Checkout Master Repository
         uses: actions/checkout@v4
         with:
+          repository: 'Justadeayo/KernelSU'
+          ref: 'master'
           fetch-depth: 0
 
       - name: Enforce Clean APK Naming
@@ -186,9 +185,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Master Repository
         uses: actions/checkout@v4
         with:
+          repository: 'Justadeayo/KernelSU'
+          ref: 'master'
           fetch-depth: 0
 
       - name: Enforce Clean APK Naming
@@ -269,3 +270,4 @@ jobs:
         with:
           name: manager
           path: dist/*.apk
+          
