@@ -61,7 +61,7 @@ on:
 
 jobs:
   build-manager:
-    uses: ./.github/workflows/build-manager.yml
+    uses: Justadeayo/KernelSU/.github/workflows/build-manager.yml@test
     with:
       telegram_chat_id: ${{ inputs.telegram_chat_id }}
     secrets:
