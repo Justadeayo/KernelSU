@@ -71,14 +71,14 @@ jobs:
 
   build-lkm:
     needs: generate-key
-    uses: Justadeayo/KernelSU/.github/workflows/build-lkm@master
+    uses: Justadeayo/KernelSU/.github/workflows/build-lkm.yml@master
     with:
       expected_size2: ${{ needs.generate-key.outputs.expected_size || '' }}
       expected_hash2: ${{ needs.generate-key.outputs.expected_hash || '' }}
     secrets: inherit
 
   build-ksuinit:
-    uses: Justadeayo/KernelSU/.github/workflows/ksuinit@master
+    uses: Justadeayo/KernelSU/.github/workflows/ksuinit.yml@master
 
   build-ksud:
     needs: [build-lkm, build-ksuinit]
@@ -94,7 +94,7 @@ jobs:
             pack_lkm: false
             pack_ksuinit: false
 
-    uses: Justadeayo/KernelSU/.github/workflows/ksud@master
+    uses: Justadeayo/KernelSU/.github/workflows/ksud.yml@master
     with:
       target: ${{ matrix.target }}
       pack_lkm: ${{ matrix.pack_lkm }}
