@@ -1,4 +1,5 @@
 name: Release
+
 on:
   push:
     tags:
@@ -9,37 +10,41 @@ jobs:
   build-manager:
     uses: ./.github/workflows/build-manager.yml
     secrets: inherit
+
   release:
     needs:
       - build-manager
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create releases and upload assets
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v8
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Rename ksud
-        run: |
-          mkdir -p ksud
-          for dir in ./ksud-*; do
-              if [ -d "$dir" ]; then
-                 echo "----- Rename $dir -----"
-                 ksud_platform_name=$(basename "$dir")
-                 find "$dir" -type f -name "ksud" -path "*/release/*" | while read -r ksud_file; do
-                   if [ -f "$ksud_file" ]; then
-                     mv "$ksud_file" "ksud/$ksud_platform_name"
-                   fi
-                 done
-              fi
-          done
+      # 1. Download the compiled Manager APK
+      - name: Download Manager Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: manager
+          path: release_assets/
 
-      - name: Display structure of downloaded files
-        run: ls -R
+      # 2. Download the compiled Kernel ZIP (if triggered via a run that built it)
+      - name: Download Kernel ZIP Artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true # Prevents failure if you run release.yml independently without a kernel build
+        with:
+          name: kernel-zip
+          path: release_assets/
 
-      - name: release
-        uses: softprops/action-gh-release@v3
+      # 3. Create GitHub Release with all available assets
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            manager/*.apk
-            android*-lkm/*_kernelsu.ko
-            ksud/ksud-*
-            ksuinit/**
+            release_assets/*.apk
+            release_assets/*.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          

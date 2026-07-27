@@ -10,6 +10,15 @@ on:
       - 'Cargo.lock'
       - 'Cargo.toml'
   workflow_call:
+    inputs:
+      telegram_chat_id:
+        required: false
+        type: string
+    secrets:
+      TELEGRAM_BOT_TOKEN:
+        required: false
+      TELEGRAM_CHAT_ID:
+        required: false
   workflow_dispatch:
 
 jobs:
@@ -49,35 +58,29 @@ jobs:
         env:
           STORE_PASS: ${{ steps.gen.outputs.keystore_password }}
         run: |
-          # Export DER certificate
           keytool -exportcert \
             -alias pr-key \
             -keystore pr-key.jks \
             -storepass "$STORE_PASS" \
             -file pr-cert.der
 
-          # Calculate size in hex
           SIZE_DEC=$(stat -c%s pr-cert.der)
           SIZE_HEX=$(printf '0x%04x' "$SIZE_DEC")
           echo "expected_size=$SIZE_HEX" >> $GITHUB_OUTPUT
 
-          # Calculate SHA256 hash
           HASH=$(sha256sum pr-cert.der | awk '{print $1}')
           echo "expected_hash=$HASH" >> $GITHUB_OUTPUT
 
-          echo "Certificate size: $SIZE_HEX ($SIZE_DEC bytes)"
-          echo "Certificate hash: $HASH"
-
   build-lkm:
     needs: generate-key
-    uses: ./.github/workflows/build-lkm.yml
+    uses: Justadeayo/KernelSU/.github/workflows/build-lkm.yml@master
     with:
       expected_size2: ${{ needs.generate-key.outputs.expected_size || '' }}
       expected_hash2: ${{ needs.generate-key.outputs.expected_hash || '' }}
     secrets: inherit
 
   build-ksuinit:
-    uses: ./.github/workflows/ksuinit.yml
+    uses: Justadeayo/KernelSU/.github/workflows/ksuinit.yml@master
 
   build-ksud:
     needs: [build-lkm, build-ksuinit]
@@ -93,7 +96,7 @@ jobs:
             pack_lkm: false
             pack_ksuinit: false
 
-    uses: ./.github/workflows/ksud.yml
+    uses: Justadeayo/KernelSU/.github/workflows/ksud.yml@master
     with:
       target: ${{ matrix.target }}
       pack_lkm: ${{ matrix.pack_lkm }}
@@ -108,13 +111,19 @@ jobs:
         working-directory: ./manager
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - name: Checkout Master Repository
+        uses: actions/checkout@v4
         with:
+          repository: 'Justadeayo/KernelSU'
+          ref: 'master'
           fetch-depth: 0
 
+      - name: Enforce Clean APK Naming
+        run: |
+          for tag in $(git tag); do git tag -d "$tag"; done
+
       - name: Write key
-        if: ${{ ( github.event_name != 'pull_request' ) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name != 'pull_request' || github.ref_type == 'tag' || github.event_name == 'workflow_call' }}
         run: |
             {
               echo KEYSTORE_PASSWORD='password'
@@ -139,16 +148,16 @@ jobs:
           } >> gradle.properties
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@v3
 
       - name: Build with Gradle
         run: |
@@ -159,15 +168,15 @@ jobs:
           fi
 
       - name: Upload build artifact
-        if: ${{ ( github.event_name != 'pull_request' ) || github.ref_type == 'tag' }}
-        uses: actions/upload-artifact@v7
+        if: ${{ github.event_name != 'pull_request' || github.ref_type == 'tag' || github.event_name == 'workflow_call' }}
+        uses: actions/upload-artifact@v4
         with:
           name: manager-gradle
           path: manager/app/build/outputs/apk/release/*.apk
 
       - name: Upload mappings
-        uses: actions/upload-artifact@v7
-        if: ${{ ( github.event_name != 'pull_request' ) || github.ref_type == 'tag' }}
+        uses: actions/upload-artifact@v4
+        if: ${{ github.event_name != 'pull_request' || github.ref_type == 'tag' || github.event_name == 'workflow_call' }}
         with:
           name: "mappings"
           path: "manager/app/build/outputs/mapping/release/"
@@ -178,10 +187,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - name: Checkout Master Repository
+        uses: actions/checkout@v4
         with:
+          repository: 'Justadeayo/KernelSU'
+          ref: 'master'
           fetch-depth: 0
+
+      - name: Enforce Clean APK Naming
+        run: |
+          for tag in $(git tag); do git tag -d "$tag"; done
 
       - name: Setup need_upload
         id: need_upload
@@ -193,22 +208,22 @@ jobs:
           fi
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@v3
 
       - name: Download gradle manager artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: manager-gradle
           path: artifacts/manager-gradle
 
       - name: Download arm64 ksud
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: ksud-aarch64-linux-android
           path: artifacts/ksud-aarch64-linux-android
 
       - name: Download arm ksud
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: ksud-armv7-linux-androideabi
           path: artifacts/ksud-armv7-linux-androideabi
@@ -230,7 +245,7 @@ jobs:
           cp -f "$ARM_KSUD" target/armv7-linux-androideabi/release/ksud
 
       - name: Prepare signing inputs
-        if: ${{ ( github.event_name != 'pull_request' ) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name != 'pull_request' || github.ref_type == 'tag' || github.event_name == 'workflow_call' }}
         run: |
           echo "SIGN_KEYSTORE_FILE=manager/dummy.keystore" >> $GITHUB_ENV
           echo "SIGN_KEY_ALIAS=alias" >> $GITHUB_ENV
@@ -238,7 +253,7 @@ jobs:
           echo "SIGN_KEY_PASSWORD=password" >> $GITHUB_ENV
 
       - name: Repack and resign
-        if: ${{ ( github.event_name != 'pull_request' ) || github.ref_type == 'tag' }}
+        if: ${{ github.event_name != 'pull_request' || github.ref_type == 'tag' || github.event_name == 'workflow_call' }}
         run: |
           python3 repack_apk.py repack \
             -b release \
@@ -252,9 +267,8 @@ jobs:
             --strip
 
       - name: Upload build artifact
-        if: ${{ ( github.event_name != 'pull_request' ) || github.ref_type == 'tag' }}
-        uses: actions/upload-artifact@v7
+        if: ${{ github.event_name != 'pull_request' || github.ref_type == 'tag' || github.event_name == 'workflow_call' }}
+        uses: actions/upload-artifact@v4
         with:
           name: manager
           path: dist/*.apk
-
