@@ -71,9 +71,7 @@ jobs:
 
       - name: Trigger Automated Build for Violet
         if: env.SYNC_NEEDED == 'true'
+        run: |
+          gh workflow run automated.yml -R Justadeayo/KernelSU --ref Custom-build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run https://github.com/Justadeayo/KernelSU/.github/workflows/automated.yml@Custom-build
-
-  
