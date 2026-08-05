@@ -194,6 +194,7 @@ jobs:
           repository: 'Justadeayo/KernelSU'
           ref: 'master'
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Enforce Clean APK Naming
         run: |
