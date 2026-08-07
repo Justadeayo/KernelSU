@@ -229,7 +229,7 @@ jobs:
           path: artifacts/ksud-aarch64-linux-android
 
       - name: Download arm ksud
-        uses: artifacts/ksud-armv7-linux-androideabi
+        uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           name: ksud-armv7-linux-androideabi
