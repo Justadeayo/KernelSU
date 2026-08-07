@@ -59,6 +59,9 @@ on:
         required: true
         type: string
 
+env:
+  TZ: "Africa/Lagos"
+
 jobs:
   build-manager:
     uses: Justadeayo/KernelSU/.github/workflows/build-manager.yml@Custom-build
@@ -70,6 +73,7 @@ jobs:
   Kernel_CI:
     needs: build-manager
     env:
+      TZ: "Africa/Lagos"
       GH_TOKEN: ${{ github.token }}
     runs-on: ubuntu-latest
     permissions:
@@ -125,7 +129,7 @@ jobs:
           TG_MSG+="*Device*: \`${{ inputs.device_codename }}\`%0A"
           TG_MSG+="*KernelSU*: \`${{ inputs.ksu_type }}\`%0A"
           TG_MSG+="*SUSFS*: \`${SUSFS_LABEL}\`%0A"
-          TG_MSG+="*Build Date*: \`$(date -u +'%Y-%m-%d %H:%M UTC')\`%0A"
+          TG_MSG+="*Build Date*: \`$(date +'%Y-%m-%d %H:%M WAT')\`%0A"
           TG_MSG+="*KSU Commit*: \`${LAST_KSU_COMMIT}\`%0A"
           TG_MSG+="*KSU Hash*: \`${COMMIT_HASH}\`%0A"
           TG_MSG+="*Build Notes*: \`${BUILD_COMMIT}\`"
@@ -210,7 +214,7 @@ jobs:
             SUSFS_LABEL="SUSFS"
           fi
           
-          ZIP_NAME="${{ inputs.device_codename }}_${{ inputs.ksu_type }}_$(date -u +"%Y%m%d_%H%M")"
+          ZIP_NAME="${{ inputs.device_codename }}_${{ inputs.ksu_type }}_$(date +"%Y%m%d_%H%M")"
           BOOT_DIR="kernel/out/arch/arm64/boot"
           
           git clone -b master https://github.com/Justadeayo/AnyKernel3.git
@@ -241,7 +245,7 @@ jobs:
           
           CLANG_ROOT="${GITHUB_WORKSPACE}/toolchains/${{ inputs.clang_version }}/bin"
           CLANG_VER=$("${CLANG_ROOT}/clang" --version | head -n1 | sed 's/(https.*//' | sed 's/ version//' | xargs)
-          BUILD_DATE=$(date -u +'%Y-%m-%d %H:%M UTC')
+          BUILD_DATE=$(date +'%Y-%m-%d %H:%M WAT')
           
           if [[ "${{ inputs.ksu_type }}" != "None" ]]; then
             sed -i "s|ksu_supported=false|ksu_supported=true|" anykernel.sh
@@ -268,7 +272,7 @@ jobs:
 
       - name: Create GitHub Release
         run: |
-          REL_NAME="${{ inputs.device_codename }}_${{ inputs.ksu_type }}_$(date -u +"%Y%m%d_%H%M")"
+          REL_NAME="${{ inputs.device_codename }}_${{ inputs.ksu_type }}_$(date +"%Y%m%d_%H%M")"
           ZIP_FILE=$(ls *.zip)
           APK_FILE=$(find manager_out/ -type f -name "*.apk" | head -n 1)
           gh release create "$REL_NAME" --title "$REL_NAME" --notes "Automated custom kernel & manager build" "${ZIP_FILE}" "${APK_FILE}"
@@ -292,7 +296,7 @@ jobs:
           *File*: \`${ZIP_NAME}.zip\`
           *Size*: \`${FILE_SIZE}\`
           *Duration*: \`${MINS}m ${SECS}s\`
-          *Date*: \`$(date -u +'%Y-%m-%d %H:%M UTC')\`"
+          *Date*: \`$(date +'%Y-%m-%d %H:%M WAT')\`"
 
           curl -sX POST -F document=@"${ZIP_FILE}" \
             "https://api.telegram.org/bot${{ inputs.telegram_bot_token }}/sendDocument" \
@@ -343,3 +347,4 @@ jobs:
               -d "disable_web_page_preview=true" \
               -d "text=${FAIL_MSG}"
           fi
+          
