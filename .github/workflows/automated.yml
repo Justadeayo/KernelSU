@@ -11,6 +11,7 @@ on:
         required: false
 
 env:
+  TZ: "Africa/Lagos"
   CLANG_VERSION: "clang-r563880c"
   KERNEL_SOURCE: "https://github.com/Justadeayo/android_kernel_xiaomi_violet"
   KERNEL_BRANCH: "sixteen"
@@ -29,6 +30,7 @@ jobs:
   Kernel_CI:
     needs: build-manager
     env:
+      TZ: "Africa/Lagos"
       GH_TOKEN: ${{ github.token }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -93,7 +95,7 @@ jobs:
           TG_MSG+="*Device*: \`${{ env.DEVICE_CODENAME }}\`%0A"
           TG_MSG+="*KernelSU*: \`${{ env.KSU_TYPE }}\`%0A"
           TG_MSG+="*SUSFS*: \`${{ env.SUSFS_LABEL }}\`%0A"
-          TG_MSG+="*Build Date*: \`$(date -u +'%Y-%m-%d %H:%M UTC')\`%0A"
+          TG_MSG+="*Build Date*: \`$(date +'%Y-%m-%d %H:%M WAT')\`%0A"
           TG_MSG+="*KSU Commit*: \`${{ env.LAST_KSU_COMMIT }}\`%0A"
           TG_MSG+="*KSU Hash*: \`${{ env.COMMIT_HASH }}\`%0A"
           TG_MSG+="*Build Notes*: \`${{ env.BUILD_COMMIT }}\`"
@@ -116,7 +118,6 @@ jobs:
           fi
           tar -xf "${{ env.CLANG_VERSION }}.tar.gz" -C ${{ env.CLANG_VERSION }}
 
-      # Updated: Added 'make O=out olddefconfig' to enforce symbol resolution after editing out/.config
       - name: Compile Kernel
         run: |
           CLANG_ROOT="${GITHUB_WORKSPACE}/toolchains/${{ env.CLANG_VERSION }}/bin"
@@ -163,7 +164,6 @@ jobs:
           touch ./.scmversion
           make O=out ${{ env.DEFCONFIG_NAME }}
 
-          # Appends extra configs and runs olddefconfig to re-evaluate dependencies correctly
           if [[ "${{ env.KSU_TYPE }}" != "None" ]]; then
             echo "CONFIG_KSU=y" >> out/.config
             echo "CONFIG_KSU_SUSFS=y" >> out/.config
@@ -187,7 +187,7 @@ jobs:
             SUSFS_LABEL="SUSFS"
           fi
           
-          ZIP_NAME="${{ env.DEVICE_CODENAME }}_${{ env.KSU_TYPE }}_$(date -u +"%Y%m%d_%H%M")"
+          ZIP_NAME="${{ env.DEVICE_CODENAME }}_${{ env.KSU_TYPE }}_$(date +"%Y%m%d_%H%M")"
           BOOT_DIR="kernel/out/arch/arm64/boot"
           
           git clone -b master https://github.com/Justadeayo/AnyKernel3.git
@@ -218,7 +218,7 @@ jobs:
           
           CLANG_ROOT="${GITHUB_WORKSPACE}/toolchains/${{ env.CLANG_VERSION }}/bin"
           CLANG_VER=$("${CLANG_ROOT}/clang" --version | head -n1 | sed 's/(https.*//' | sed 's/ version//' | xargs)
-          BUILD_DATE=$(date -u +'%Y-%m-%d %H:%M UTC')
+          BUILD_DATE=$(date +'%Y-%m-%d %H:%M WAT')
           
           if [[ "${{ env.KSU_TYPE }}" != "None" ]]; then
             sed -i "s|ksu_supported=false|ksu_supported=true|" anykernel.sh
@@ -245,7 +245,7 @@ jobs:
 
       - name: Create GitHub Release
         run: |
-          REL_NAME="${{ env.DEVICE_CODENAME }}_${{ env.KSU_TYPE }}_$(date -u +"%Y%m%d_%H%M")"
+          REL_NAME="${{ env.DEVICE_CODENAME }}_${{ env.KSU_TYPE }}_$(date +"%Y%m%d_%H%M")"
           ZIP_FILE="${GITHUB_WORKSPACE}/${ZIP_NAME}.zip"
           APK_FILE=$(find manager_out/ -type f -name "*.apk" | head -n 1)
           gh release create "$REL_NAME" --title "$REL_NAME" --notes "Automated custom kernel & manager build" "${ZIP_FILE}" "${APK_FILE}"
@@ -269,7 +269,7 @@ jobs:
           *File*: \`${{ env.ZIP_NAME }}.zip\`
           *Size*: \`${FILE_SIZE}\`
           *Duration*: \`${MINS}m ${SECS}s\`
-          *Date*: \`$(date -u +'%Y-%m-%d %H:%M UTC')\`"
+          *Date*: \`$(date +'%Y-%m-%d %H:%M WAT')\`"
 
           curl -sX POST -F document=@"${ZIP_FILE}" \
             "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
@@ -320,4 +320,3 @@ jobs:
               -d "disable_web_page_preview=true" \
               -d "text=${FAIL_MSG}"
           fi
-          
