@@ -119,9 +119,11 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Enforce Clean APK Naming
+      - name: Set Custom Base Version Tag
         run: |
-          for tag in $(git tag); do git tag -d "$tag"; done
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v3.2.5" -m "Base release tag" HEAD~1 2>/dev/null || git tag -f "v3.2.5"
 
       - name: Write key
         if: ${{ github.event_name != 'pull_request' || github.ref_type == 'tag' || github.event_name == 'workflow_call' }}
@@ -196,9 +198,11 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Enforce Clean APK Naming
+      - name: Set Custom Base Version Tag
         run: |
-          for tag in $(git tag); do git tag -d "$tag"; done
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v3.2.5" -m "Base release tag" HEAD~1 2>/dev/null || git tag -f "v3.2.5"
 
       - name: Setup need_upload
         id: need_upload
@@ -225,7 +229,8 @@ jobs:
           path: artifacts/ksud-aarch64-linux-android
 
       - name: Download arm ksud
-        uses: actions/download-artifact@v4
+        uses: artifacts/ksud-armv7-linux-androideabi
+        continue-on-error: true
         with:
           name: ksud-armv7-linux-androideabi
           path: artifacts/ksud-armv7-linux-androideabi
@@ -274,3 +279,4 @@ jobs:
         with:
           name: manager
           path: dist/*.apk
+          
