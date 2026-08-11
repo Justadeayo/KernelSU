@@ -162,6 +162,10 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Patch Repositories to Justadeayo
+        run: |
+          sed -i 's|backslashxx/KernelSU|Justadeayo/KernelSU|g' app/src/main/java/me/weishu/kernelsu/ui/util/Downloader.kt
+
       - name: Build with Gradle
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
