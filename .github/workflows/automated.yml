@@ -144,7 +144,9 @@ jobs:
           
           case "${{ env.KSU_TYPE }}" in
             "KernelSU")
-              curl -LSs "https://raw.githubusercontent.com/Justadeayo/KernelSU/refs/heads/master/kernel/setup.sh" | bash -s master
+              curl -LSs "https://raw.githubusercontent.com/Justadeayo/KernelSU/refs/heads/master/kernel/setup.sh" > setup.sh
+              sed -i 's|backslashxx/KernelSU|Justadeayo/KernelSU|g' setup.sh
+              bash setup.sh master
               ;;
             "ReSukiSU-with-susfs")
               curl -LSs "https://raw.githubusercontent.com/skye-tachyon/KernelSU/master/kernel/setup.sh" | bash -s master
@@ -320,3 +322,4 @@ jobs:
               -d "disable_web_page_preview=true" \
               -d "text=${FAIL_MSG}"
           fi
+          
