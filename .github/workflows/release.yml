@@ -21,6 +21,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Calculate version tag v3.2.5-<incremental_number> starting at 36
+      - name: Generate Version Tag
+        id: version
+        run: |
+          OFFSET=35
+          RUN_NUM=${{ github.run_number }}
+          TAG_BUILD=$((OFFSET + RUN_NUM))
+          VERSION_TAG="v3.2.5-${TAG_BUILD}"
+          echo "TAG_NAME=${VERSION_TAG}" >> $GITHUB_ENV
+          echo "Generated Tag: ${VERSION_TAG}"
+
       # 1. Download the compiled Manager APK
       - name: Download Manager Artifact
         uses: actions/download-artifact@v4
@@ -31,20 +42,20 @@ jobs:
       # 2. Download the compiled Kernel ZIP (if triggered via a run that built it)
       - name: Download Kernel ZIP Artifact
         uses: actions/download-artifact@v4
-        continue-on-error: true # Prevents failure if you run release.yml independently without a kernel build
+        continue-on-error: true
         with:
           name: kernel-zip
           path: release_assets/
 
-      # 3. Create GitHub Release with all available assets
+      # 3. Create GitHub Release using generated tag
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.TAG_NAME }}
           files: |
             release_assets/*.apk
             release_assets/*.zip
           generate_release_notes: true
           draft: false
           prerelease: false
-          
