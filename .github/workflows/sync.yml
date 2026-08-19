@@ -1,0 +1,76 @@
+name: Sync Upstream Daily
+
+on:
+  schedule:
+    - cron: '30 0 */3 * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      actions: write 
+    steps:
+      - name: Checkout master branch
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0 
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream repository
+        run: |
+          git remote add upstream https://github.com/backslashxx/KernelSU.git
+          git fetch upstream
+
+      - name: Sync and Align History
+        run: |
+          UPSTREAM_BRANCH="master"
+          if git show-ref --quiet refs/remotes/upstream/main; then
+            UPSTREAM_BRANCH="main"
+          fi
+
+          echo "Comparing local master with upstream/$UPSTREAM_BRANCH..."
+
+          if git merge-base --is-ancestor upstream/$UPSTREAM_BRANCH HEAD; then
+            echo "✅ master is already up to date. Skipping sync."
+            echo "SYNC_NEEDED=false" >> $GITHUB_ENV
+          else
+            echo "🔄 Upstream has new changes. Aligning master perfectly with upstream..."
+            
+            git reset --hard upstream/$UPSTREAM_BRANCH
+            
+            echo "SYNC_NEEDED=true" >> $GITHUB_ENV
+          fi
+
+      - name: Push updates
+        if: env.SYNC_NEEDED == 'true'
+        run: |
+          git push origin master --force
+
+      - name: Send merge notification to Telegram
+        if: env.SYNC_NEEDED == 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          MESSAGE=$(git log -1 --pretty=%s)
+          
+          ENCODED_MESSAGE=$(echo "$MESSAGE" | python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.stdin.read()))")
+          
+          curl -s -X POST https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage \
+            -d chat_id=$TELEGRAM_CHAT_ID \
+            -d text="✅ *Sync Complete on master branch:*%0A$ENCODED_MESSAGE" \
+            -d parse_mode=Markdown
+
+      - name: Trigger Automated Build for Violet
+        if: env.SYNC_NEEDED == 'true'
+        run: |
+          gh workflow run automated.yml -R Justadeayo/KernelSU --ref Custom-build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
