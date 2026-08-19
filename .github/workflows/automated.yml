@@ -34,7 +34,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
       actions: read
@@ -51,14 +51,21 @@ jobs:
         with:
           swap-size-gb: 16
 
+      - name: Setup CCache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: kernel-${{ env.DEVICE_CODENAME }}
+          max-size: 5G
+
       - name: Start Time
         run: echo "BUILD_START=$(date +%s)" >> $GITHUB_ENV
 
       - name: Install build dependencies
         run: |
           sudo apt update
-          sudo apt install -y bc bison flex libssl-dev libelf-dev libdw-dev build-essential lz4 git python3 curl dwarves cpio lld gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi zip
-
+          sudo apt-get install -y --no-install-recommends \
+            bc bison flex libssl-dev libelf-dev libdw-dev build-essential lz4 git python3 curl dwarves cpio lld gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi zip
+            
       - name: Clone Kernel Source
         run: |
           rm -rf kernel
@@ -120,6 +127,8 @@ jobs:
 
       - name: Compile Kernel
         run: |
+          export CC="ccache ${CLANG_ROOT}/clang"
+          export CXX="ccache ${CLANG_ROOT}/clang++"
           CLANG_ROOT="${GITHUB_WORKSPACE}/toolchains/${{ env.CLANG_VERSION }}/bin"
           export PATH="${CLANG_ROOT}:$PATH"
           export ARCH=arm64
