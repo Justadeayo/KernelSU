@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  Full-Release:
+    uses: ./.github/workflows/automated.yml
+    secrets: inherit
+
+  release:
+    needs:
+      - Full-Release
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate and Push Version Tag
+        id: version
+        run: |
+          OFFSET=35
+          RUN_NUM=${{ github.run_number }}
+          TAG_BUILD=$((OFFSET + RUN_NUM))
+          VERSION_TAG="v3.2.5-${TAG_BUILD}"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$VERSION_TAG"
+          git push origin "$VERSION_TAG"
+
+          echo "TAG_NAME=${VERSION_TAG}" >> $GITHUB_ENV
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.TAG_NAME }}
+          body: |
+            • Synced with Upstream Changes.
+            • Latest patch included
+            
+            
+            
+            ~by Justus26🎖️
+          files: |
+            release_assets/**/*.apk
+            release_assets/**/*.zip
+          draft: false
+          prerelease: false
