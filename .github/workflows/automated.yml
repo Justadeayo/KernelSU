@@ -257,7 +257,10 @@ jobs:
           REL_NAME="${{ env.DEVICE_CODENAME }}_${{ env.KSU_TYPE }}_$(date +"%Y%m%d_%H%M")"
           ZIP_FILE="${GITHUB_WORKSPACE}/${ZIP_NAME}.zip"
           APK_FILE=$(find manager_out/ -type f -name "*.apk" | head -n 1)
-          gh release create "$REL_NAME" --title "$REL_NAME" --notes "Automated custom kernel & manager build" "${ZIP_FILE}" "${APK_FILE}"
+          
+          CHANGELOG_NOTES="Synced with upstream changes"
+          
+          gh release create "$REL_NAME" --title "$REL_NAME" --notes "$CHANGELOG_NOTES" "${ZIP_FILE}" "${APK_FILE}"
 
       - name: Upload to Telegram
         run: |
