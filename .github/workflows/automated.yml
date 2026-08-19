@@ -62,7 +62,7 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo apt update
+          sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             bc bison flex libssl-dev libelf-dev libdw-dev build-essential lz4 git python3 curl dwarves cpio lld gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi zip
             
@@ -128,7 +128,7 @@ jobs:
       - name: Compile Kernel
         run: |
           CLANG_ROOT="${GITHUB_WORKSPACE}/toolchains/${{ env.CLANG_VERSION }}/bin"
-          export PATH="${CLANG_ROOT}:$PATH"
+          export PATH="/usr/lib/ccache:${CLANG_ROOT}:$PATH"
           export CC="ccache ${CLANG_ROOT}/clang"
           export CXX="ccache ${CLANG_ROOT}/clang++"
           export HOSTCC="ccache ${CLANG_ROOT}/clang"
@@ -329,4 +329,3 @@ jobs:
               -d "disable_web_page_preview=true" \
               -d "text=${FAIL_MSG}"
           fi
-          
