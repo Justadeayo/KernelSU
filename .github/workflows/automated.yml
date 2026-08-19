@@ -127,18 +127,16 @@ jobs:
 
       - name: Compile Kernel
         run: |
-          export CC="ccache ${CLANG_ROOT}/clang"
-          export CXX="ccache ${CLANG_ROOT}/clang++"
           CLANG_ROOT="${GITHUB_WORKSPACE}/toolchains/${{ env.CLANG_VERSION }}/bin"
           export PATH="${CLANG_ROOT}:$PATH"
+          export CC="ccache ${CLANG_ROOT}/clang"
+          export CXX="ccache ${CLANG_ROOT}/clang++"
+          export HOSTCC="ccache ${CLANG_ROOT}/clang"
+          export HOSTCXX="ccache ${CLANG_ROOT}/clang++"
           export ARCH=arm64
           export SUBARCH=arm64
           export LLVM=1
           export LLVM_IAS=1
-          export CC="${CLANG_ROOT}/clang"
-          export CXX="${CLANG_ROOT}/clang++"
-          export HOSTCC="${CLANG_ROOT}/clang"
-          export HOSTCXX="${CLANG_ROOT}/clang++"
           export LD="${CLANG_ROOT}/ld.lld"
           export AR="${CLANG_ROOT}/llvm-ar"
           export NM="${CLANG_ROOT}/llvm-nm"
