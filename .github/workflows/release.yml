@@ -53,9 +53,9 @@ jobs:
         with:
           tag_name: ${{ env.TAG_NAME }}
           name: Release ${{ env.TAG_NAME }}
+          body: "Synced with upstream changes"
           files: |
             release_assets/*.apk
             release_assets/*.zip
-          generate_release_notes: true
           draft: false
           prerelease: false
