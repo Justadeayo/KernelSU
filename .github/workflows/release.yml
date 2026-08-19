@@ -53,7 +53,12 @@ jobs:
         with:
           tag_name: ${{ env.TAG_NAME }}
           name: Release ${{ env.TAG_NAME }}
-          body: "Synced with upstream changes"
+          body: |
+            • Synced with Upstream Changes.
+            • Latest patch included
+            • Experimental LKM support added
+
+            ~by Justus26🎖️
           files: |
             release_assets/*.apk
             release_assets/*.zip
