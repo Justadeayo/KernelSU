@@ -248,6 +248,12 @@ jobs:
           name: kernel-zip
           path: "*.zip"
 
+      - name: Download Manager APK Artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: manager_out/
+          merge-multiple: true
+
       - name: Upload to Telegram
         run: |
           END_TIME=$(date +%s)
@@ -256,7 +262,7 @@ jobs:
           SECS=$((DURATION % 60))
           
           ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
-          APK_FILE=$(find manager_out/ -type f -name "*.apk" 2>/dev/null | head -n 1)
+          APK_FILE=$(find manager_out/ -type f -name "*.apk" ! -name "*unsigned*" ! -name "*unaligned*" 2>/dev/null | head -n 1)
           FILE_SIZE=$(du -sh "$ZIP_FILE" | cut -f1)
           
           SUCCESS_MSG="*Build Successful!* ✅
