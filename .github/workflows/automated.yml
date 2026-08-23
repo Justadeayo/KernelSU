@@ -45,13 +45,6 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Download Manager APK Artifact
-        uses: actions/download-artifact@v4
-        with:
-          path: manager_out/
-          pattern: '*'
-          merge-multiple: true
-
       - name: Setup SWAP
         uses: pierotofy/set-swap-space@master
         with:
@@ -100,25 +93,16 @@ jobs:
 
       - name: Send Build Start Message
         run: |
-          TG_MSG="*========================*%0A"
-          TG_MSG+="*   J  U  S  T  U  S    *%0A"
-          TG_MSG+="*   K  E  R  N  E  L    *%0A"
-          TG_MSG+="*========================*%0A"
-          TG_MSG+="*Compiler*: \`${{ env.CLANG_VERSION }}\`%0A"
-          TG_MSG+="*Linux Version*: \`${{ env.KERNEL_VER }}\`%0A"
-          TG_MSG+="*Device*: \`${{ env.DEVICE_CODENAME }}\`%0A"
-          TG_MSG+="*KernelSU*: \`${{ env.KSU_TYPE }}\`%0A"
-          TG_MSG+="*SUSFS*: \`${{ env.SUSFS_LABEL }}\`%0A"
-          TG_MSG+="*Build Date*: \`$(date +'%Y-%m-%d %H:%M WAT')\`%0A"
-          TG_MSG+="*KSU Commit*: \`${{ env.LAST_KSU_COMMIT }}\`%0A"
-          TG_MSG+="*KSU Hash*: \`${{ env.COMMIT_HASH }}\`%0A"
-          TG_MSG+="*Build Notes*: \`${{ env.BUILD_COMMIT }}\`"
+          START_MSG="🛠 *XCalibur Kernel Build Started!*%0A%0A"
+          START_MSG+="*Device*: \`${{ env.DEVICE_CODENAME }}\`%0A"
+          START_MSG+="*Root*: \`${{ inputs.ksu_type }}\`%0A"
+          START_MSG+="*Status*: Compilation in progress..."
 
           curl -sX POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
             -d "parse_mode=Markdown" \
             -d "disable_web_page_preview=true" \
-            -d "text=${TG_MSG}"
+            -d "text=${START_MSG}"
 
       - name: Download AOSP Clang
         run: |
@@ -248,13 +232,7 @@ jobs:
           name: kernel-zip
           path: "*.zip"
 
-      - name: Download Manager APK Artifact
-        uses: actions/download-artifact@v4
-        with:
-          path: manager_out/
-          merge-multiple: true
-
-      - name: Upload to Telegram
+      - name: Send Build Completion Message
         run: |
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - BUILD_START))
@@ -262,31 +240,28 @@ jobs:
           SECS=$((DURATION % 60))
           
           ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
-          APK_FILE=$(find manager_out/ -type f -name "*.apk" ! -name "*unsigned*" ! -name "*unaligned*" 2>/dev/null | head -n 1)
           FILE_SIZE=$(du -sh "$ZIP_FILE" | cut -f1)
           
-          SUCCESS_MSG="*Build Successful!* ✅
+          SUCCESS_MSG="*=============================*%0A"
+          SUCCESS_MSG+="*   X C A L I B U R  -  K E R N E L  *%0A"
+          SUCCESS_MSG+="*=============================*%0A"
+          SUCCESS_MSG+="%0A"
+          SUCCESS_MSG+="*Developer*: @Justus26🪖%0A"
+          SUCCESS_MSG+="*Device*: \`${{ env.DEVICE_CODENAME }}\`%0A"
+          SUCCESS_MSG+="*Linux Ver*: \`${{ env.KERNEL_VER }}\`%0A"
+          SUCCESS_MSG+="*Compiler*: \`${{ env.CLANG_VERSION }}\`%0A"
+          SUCCESS_MSG+="*Root*: \`${{ env.KSU_TYPE }}\`%0A"
+          SUCCESS_MSG+="*SUSFS*: \`${{ env.SUSFS_LABEL }}\`%0A"
+          SUCCESS_MSG+="*Size*: \`${FILE_SIZE}\`%0A"
+          SUCCESS_MSG+="*Duration*: \`${MINS}m ${SECS}s\`%0A"
+          SUCCESS_MSG+="*Date*: \`$(date +'%Y-%m-%d %H:%M WAT')\`%0A"
+          SUCCESS_MSG+="Download APK and Zip from latest Release on https://github.com/Justadeayo/KernelSU/releases"
 
-          *Device*: \`${{ env.DEVICE_CODENAME }}\`
-          *KernelSU*: \`${{ env.KSU_TYPE }}\`
-          *SUSFS*: \`${{ env.SUSFS_LABEL }}\`
-          *Size*: \`${FILE_SIZE}\`
-          *Duration*: \`${MINS}m ${SECS}s\`
-          *Date*: \`$(date +'%Y-%m-%d %H:%M WAT')\`"
-
-          if [ -n "$APK_FILE" ]; then
-            curl -sX POST -F document=@"${APK_FILE}" \
-              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-              -F "chat_id=${TELEGRAM_CHAT_ID}" \
-              -F "parse_mode=Markdown" \
-              -F "caption=📦 *Corresponding Manager APK Build*"
-          fi
-
-          curl -sX POST -F document=@"${ZIP_FILE}" \
-            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-            -F "chat_id=${TELEGRAM_CHAT_ID}" \
-            -F "parse_mode=Markdown" \
-            -F "caption=${SUCCESS_MSG}"
+          curl -sX POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "parse_mode=Markdown" \
+            -d "disable_web_page_preview=true" \
+            -d "text=${SUCCESS_MSG}"
 
       - name: Send Build Failure Message & Logs
         if: failure()
