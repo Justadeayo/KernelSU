@@ -28,7 +28,7 @@ on:
         default: "https://github.com/Justadeayo/android_kernel_xiaomi_violet"
 
       kernel_branch:
-        description: Kernel Branch
+        description: Default Kernel Branch
         required: true
         type: string
         default: "sixteen"
@@ -75,17 +75,25 @@ env:
   TZ: "Africa/Lagos"
 
 jobs:
-  build-manager:
+  build-manager-ksu:
     if: ${{ inputs.ksu_type == 'KernelSU' }}
-    uses: Justadeayo/KernelSU/.github/workflows/build-manager.yml@Custom-build
+    uses: Justadeayo/KernelSU/.github/workflows/build-manager.yml@beta
+    with:
+      telegram_chat_id: ${{ inputs.telegram_chat_id }}
+    secrets:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
+  build-manager-susfs:
+    if: ${{ inputs.ksu_type == 'ReSukiSU-with-susfs' }}
+    uses: Justadeayo/KernelSU/.github/workflows/build-susfs-manager.yml@beta
     with:
       telegram_chat_id: ${{ inputs.telegram_chat_id }}
     secrets:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
 
   Kernel_CI:
-    if: always() && !cancelled() && (needs.build-manager.result == 'success' || needs.build-manager.result == 'skipped')
-    needs: build-manager
+    if: always() && !cancelled() && (needs.build-manager-ksu.result == 'success' || needs.build-manager-ksu.result == 'skipped') && (needs.build-manager-susfs.result == 'success' || needs.build-manager-susfs.result == 'skipped')
+    needs: [build-manager-ksu, build-manager-susfs]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -138,7 +146,12 @@ jobs:
       - name: Clone Kernel Source
         run: |
           rm -rf kernel
-          git clone --depth=1 -b ${{ inputs.kernel_branch }} ${{ inputs.kernel_source }} kernel
+          TARGET_BRANCH="${{ inputs.kernel_branch }}"
+          if [[ "${{ inputs.ksu_type }}" == "ReSukiSU-with-susfs" ]]; then
+            TARGET_BRANCH="sixteen-susfs"
+          fi
+          echo "Cloning branch: ${TARGET_BRANCH}"
+          git clone --depth=1 -b "${TARGET_BRANCH}" ${{ inputs.kernel_source }} kernel
 
       - name: Prepare Metadata
         run: |
@@ -209,7 +222,6 @@ jobs:
           cd kernel
           mkdir -p out
           
-          # Initialize KernelSU setup scripts directly from Justadeayo/KernelSU
           case "${{ inputs.ksu_type }}" in
             "KernelSU")
               curl -LSs "https://raw.githubusercontent.com/Justadeayo/KernelSU/refs/heads/master/kernel/setup.sh" > setup.sh
@@ -217,8 +229,7 @@ jobs:
               bash setup.sh master
               ;;
             "ReSukiSU-with-susfs")
-              curl -LSs "https://raw.githubusercontent.com/Justadeayo/KernelSU/refs/heads/master/kernel/setup.sh" > setup.sh
-              sed -i 's|backslashxx/KernelSU|Justadeayo/KernelSU|g' setup.sh
+              curl -LSs "https://raw.githubusercontent.com/doubledashdot/sKernelSU/refs/heads/master/kernel/setup.sh" > setup.sh
               bash setup.sh master
               ;;
           esac
@@ -233,13 +244,21 @@ jobs:
             echo "CONFIG_OVERLAY_FS=y" >> "$DEFCONFIG"
           fi
           
-          # Download and apply SuSFS kernel-level patches for 4.14
           if [[ "${{ inputs.ksu_type }}" == "ReSukiSU-with-susfs" ]]; then
-            curl -Lo susfs.patch https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/refs/heads/mainline/Patches/Patch/susfs_patch_to_4.14.patch
-            curl -Lo inline.sh https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/refs/heads/mainline/Patches/susfs_inline_hook_patches.sh
-            patch -p1 < susfs.patch
-            bash inline.sh
             echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSUD=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_HIDE_KSU=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT_SINGLE_ARM_MODE=y" >> "$DEFCONFIG"
           fi
           
           touch ./.scmversion
@@ -311,7 +330,7 @@ jobs:
           path: "*.zip"
 
       - name: Download compiled Manager APK
-        if: ${{ inputs.ksu_type == 'KernelSU' }}
+        if: ${{ inputs.ksu_type != 'None' }}
         uses: actions/download-artifact@v4
         with:
           name: manager
@@ -416,3 +435,4 @@ jobs:
               -d "disable_web_page_preview=true" \
               -d "text=${FAIL_MSG}"
           fi
+          
