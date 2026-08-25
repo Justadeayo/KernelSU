@@ -16,7 +16,6 @@ env:
   KERNEL_BRANCH: "sixteen"
   DEFCONFIG_NAME: "vendor/violet-perf_defconfig"
   DEVICE_CODENAME: "violet"
-  KSU_TYPE: "KernelSU"
   BUILD_COMMIT: "Synced with upstream changes 💯"
 
 jobs:
@@ -84,18 +83,12 @@ jobs:
           echo "LAST_KSU_COMMIT=${KSU_LOG}" >> $GITHUB_ENV
           echo "COMMIT_HASH=${KSU_HASH}" >> $GITHUB_ENV
           echo "BUILD_COMMIT=${{ env.BUILD_COMMIT }}" >> $GITHUB_ENV
-          
-          if [[ "${{ env.KSU_TYPE }}" == "ReSukiSU-with-susfs" ]]; then
-            echo "SUSFS_LABEL=Yes" >> $GITHUB_ENV
-          else
-            echo "SUSFS_LABEL=N/A" >> $GITHUB_ENV
-          fi
 
       - name: Send Build Start Message
         run: |
           START_MSG="🛠 *XCalibur Kernel Build Started!*%0A%0A"
           START_MSG+="*Device*: \`${{ env.DEVICE_CODENAME }}\`%0A"
-          START_MSG+="*Root*: \`${{ env.KSU_TYPE }}\`%0A"
+          START_MSG+="*Root*: \`KernelSU\`%0A"
           START_MSG+="*Status*: Compilation in progress..."
 
           curl -sX POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
@@ -140,35 +133,22 @@ jobs:
           cd kernel
           mkdir -p out
           
-          case "${{ env.KSU_TYPE }}" in
-            "KernelSU")
-              curl -LSs "https://raw.githubusercontent.com/Justadeayo/KernelSU/refs/heads/master/kernel/setup.sh" > setup.sh
-              sed -i 's|backslashxx/KernelSU|Justadeayo/KernelSU|g' setup.sh
-              bash setup.sh master
-              ;;
-            "ReSukiSU-with-susfs")
-              curl -LSs "https://raw.githubusercontent.com/skye-tachyon/KernelSU/master/kernel/setup.sh" | bash -s master
-              ;;
-          esac
+          curl -LSs "https://raw.githubusercontent.com/Justadeayo/KernelSU/refs/heads/master/kernel/setup.sh" > setup.sh
+          sed -i 's|backslashxx/KernelSU|Justadeayo/KernelSU|g' setup.sh
+          bash setup.sh master
           
           DEFCONFIG="arch/arm64/configs/${{ env.DEFCONFIG_NAME }}"
           
-          if [[ "${{ env.KSU_TYPE }}" == "ReSukiSU-with-susfs" || "${{ env.KSU_TYPE }}" == "KernelSU" ]]; then
-            echo "CONFIG_KSU=y" >> "$DEFCONFIG"
-            echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
-            if [[ "${{ env.KSU_TYPE }}" == "KernelSU" ]]; then
-              echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE=y" >> "$DEFCONFIG"
-            fi
-          fi
+          echo "CONFIG_KSU=y" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE=y" >> "$DEFCONFIG"
           
           touch ./.scmversion
           make O=out ${{ env.DEFCONFIG_NAME }}
 
-          if [[ "${{ env.KSU_TYPE }}" != "None" ]]; then
-            echo "CONFIG_KSU=y" >> out/.config
-            echo "CONFIG_KSU_SUSFS=y" >> out/.config
-            make O=out olddefconfig
-          fi
+          echo "CONFIG_KSU=y" >> out/.config
+          echo "CONFIG_KSU_SUSFS=y" >> out/.config
+          make O=out olddefconfig
           
           set +e
           make -j$(nproc) O=out 2>&1 | tee "${GITHUB_WORKSPACE}/build.log"
@@ -182,12 +162,7 @@ jobs:
 
       - name: Make AnyKernel3
         run: |
-          SUSFS_LABEL="N/A"
-          if [[ "${{ env.KSU_TYPE }}" == "ReSukiSU-with-susfs" ]]; then
-            SUSFS_LABEL="SUSFS"
-          fi
-          
-          ZIP_NAME="${{ env.DEVICE_CODENAME }}_${{ env.KSU_TYPE }}_$(date +"%Y%m%d_%H%M")"
+          ZIP_NAME="${{ env.DEVICE_CODENAME }}_KernelSU_$(date +"%Y%m%d_%H%M")"
           BOOT_DIR="kernel/out/arch/arm64/boot"
           
           git clone -b master https://github.com/Justadeayo/AnyKernel3.git
@@ -215,10 +190,7 @@ jobs:
           CLANG_VER=$("${CLANG_ROOT}/clang" --version | head -n1 | sed 's/(https.*//' | sed 's/ version//' | xargs)
           BUILD_DATE=$(date +'%Y-%m-%d %H:%M WAT')
           
-          if [[ "${{ env.KSU_TYPE }}" != "None" ]]; then
-            sed -i "s|ksu_supported=false|ksu_supported=true|" anykernel.sh
-          fi
-          
+          sed -i "s|ksu_supported=false|ksu_supported=true|" anykernel.sh
           sed -i "s|##CLANG_VERSION##|${CLANG_VER}|" anykernel.sh
           sed -i "s|##BUILD_DATE##|${BUILD_DATE}|" anykernel.sh
           
@@ -250,8 +222,7 @@ jobs:
           SUCCESS_MSG+="*Device*: \`${{ env.DEVICE_CODENAME }}\`%0A"
           SUCCESS_MSG+="*Linux Ver*: \`${{ env.KERNEL_VER }}\`%0A"
           SUCCESS_MSG+="*Compiler*: \`${{ env.CLANG_VERSION }}\`%0A"
-          SUCCESS_MSG+="*Root*: \`${{ env.KSU_TYPE }}\`%0A"
-          SUCCESS_MSG+="*SUSFS*: \`${{ env.SUSFS_LABEL }}\`%0A"
+          SUCCESS_MSG+="*Root*: \`KernelSU\`%0A"
           SUCCESS_MSG+="*Size*: \`${FILE_SIZE}\`%0A"
           SUCCESS_MSG+="*Duration*: \`${MINS}m ${SECS}s\`%0A"
           SUCCESS_MSG+="*Date*: \`$(date +'%Y-%m-%d %H:%M WAT')\`%0A"
@@ -279,7 +250,7 @@ jobs:
           FAIL_MSG="*Build Failed!* ❌
 
           *Device*: \`${{ env.DEVICE_CODENAME }}\`
-          *KernelSU*: \`${{ env.KSU_TYPE }}\`
+          *KernelSU*: \`KernelSU\`
           *Duration*: \`${MINS}m ${SECS}s\`
           *Run Link*: [View Actions Log](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 
