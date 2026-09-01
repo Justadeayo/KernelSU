@@ -1,193 +1,148 @@
 # KernelSU Build Workflows Guide
 
-> **⚠️ Important Notice:** This is a Custom-build branch. These workflows are provided for testing and evaluation purposes. **Use with caution and at your own risk.** While the workflows have been tested and certified as of the current date, always verify compatibility with your setup before using in production. You assume all responsibility for any outcomes.
+> **⚠️ Important Notice:** This is a custom build branch. These workflows are provided for testing, evaluation, and customization purposes. **Use with caution and at your own risk.** Always verify compatibility with your setup before building. You assume all responsibility for any outcomes.
+This guide details the automated GitHub Actions workflows in this repository for compiling Android custom kernels and the KernelSU Manager app.
+---
+## 🛠️ Hardcoded References & Customization Guide
+If you fork or adapt this repository for your own kernel/device, **you must replace the following hardcoded values** across the workflow `.yml` files:
 
-This guide explains how to use the automated build workflows in this branch for seamless kernel and manager app compilation.
+| File Path | Hardcoded Field / Value | What to Replace With |
+| :--- | :--- | :--- |
+| `.github/workflows/Kernel_&_Manager_build.yml` | `Justadeayo/KernelSU` (job call) | `<your-github-username>/<your-repo-name>` |
+| `.github/workflows/Kernel_&_Manager_build.yml` | `https://github.com/Justadeayo/android_kernel_xiaomi_violet` | Default kernel repo URL for your device |
+| `.github/workflows/Kernel_&_Manager_build.yml` | `sixteen` / `vendor/violet-perf_defconfig` | Your kernel branch & defconfig path |
+| `.github/workflows/automated.yml` | `Justadeayo/KernelSU` & repo URLs | Your repository path & kernel repository URL |
+| `.github/workflows/sync.yml` | `gh workflow run release.yml -R Justadeayo/KernelSU` | Replace `Justadeayo/KernelSU` with your repo |
+| `.github/workflows/build-manager.yml` | `repository: 'Justadeayo/KernelSU'` | Replace with your KernelSU repository |
+| `.github/workflows/build-manager.yml` | `sed -i 's\ | backslashxx/KernelSU\ | Justadeayo/KernelSU\ | g'` | Update patch strings to match your repo |
 
+---
 ## Overview
-
-This branch contains optimized GitHub Actions workflows that automate:
-- **Kernel compilation** for Android devices
-- **Manager APK building** with Kotlin/Jetpack Compose
-- **Artifact repacking** with pre-built ksud binaries
-- **Telegram notifications** for build status and progress
-
-All workflows are designed to work independently or together, giving you flexibility for different build scenarios.
-
+This repository contains five primary GitHub Actions workflows:
+1. **`build-manager.yml`** — Manager App & `ksud` Binaries
+2. **`automated.yml`** — Automated Kernel & Manager CI (Preconfigured target)
+3. **`Kernel_&_Manager_build.yml`** — Custom Interactive Matrix Builds
+4. **`release.yml`** — Formal Tag & Automated Release Publishing
+5. **`sync.yml`** — Upstream Synchronization with Upstream KernelSU
 ---
-
-## Workflows Available
-
-### 1. **build-manager.yml** — Manager App & ksud Binaries
+## Workflows Breakdown
+### 1. `build-manager.yml` — Manager App & ksud Binaries
 **Path:** `.github/workflows/build-manager.yml`
-
-Builds the KernelSU Manager APK and compiles ksud binaries for both ARM64 and ARMv7.
-
-**Triggers:**
-- Push to branches: `main`, `dev`, `ci`, `test`, `staging`
-- Changes in: `manager/`, `userspace/`, `Cargo.lock`, `Cargo.toml`
-- Manual dispatch: `workflow_dispatch`
-- Called by other workflows
-
-**Outputs:**
-- `manager-gradle` — Signed/unsigned APK from Gradle
-- `ksud-aarch64-linux-android` — ARM64 ksud binary
-- `ksud-armv7-linux-androideabi` — ARMv7 ksud binary
-- `mappings` — ProGuard mapping files (for release builds)
-
+Builds the KernelSU Manager APK and compiles native `ksud` binaries for both ARM64 (`aarch64-linux-android`) and ARMv7 (`armv7-linux-androideabi`).
+* **Triggers:**
+  * Push to branches: `main`, `dev`, `ci`, `test`, `staging`, `Custom-build`
+  * Workflow call (`workflow_call`)
+  * Manual dispatch (`workflow_dispatch`)
+* **Key Features:**
+  * Dynamic PR keystore generation vs. standard dummy release keystore.
+  * Native Rust target compilation with Android NDK r29.
+  * Automatic repacking of APK with compiled native binaries via `repack_apk.py`.
+* **Outputs:**
+  * `manager` — Final repacked and signed Manager APK.
+  * `ksud-aarch64-linux-android` & `ksud-armv7-linux-androideabi` — Standalone binaries.
+  * `mappings` — ProGuard mapping files for debugging release builds.
 ---
 
-### 2. **automated.yml** — Automated Kernel & Manager CI
+### 2. `automated.yml` — Automated Build (Default Device Target)
 **Path:** `.github/workflows/automated.yml`
-
-Fully automated build for a specific device with preconfigured defaults (Violet device). Clones kernel source, applies KernelSU patches, compiles, and packages everything into an AnyKernel3 ZIP.
-
-**When to use:**
-- Regular scheduled builds
-- Continuous integration after upstream syncs
-- Predictable, repeatable builds with fixed configuration
-
-**Configuration (in workflow env):**
-```yaml
-CLANG_VERSION: "clang-r563880c"
-KERNEL_SOURCE: "https://github.com/Justadeayo/android_kernel_xiaomi_violet"
-KERNEL_BRANCH: "sixteen"
-DEFCONFIG_NAME: "vendor/violet-perf_defconfig"
-DEVICE_CODENAME: "violet"
-KSU_TYPE: "KernelSU"  # or "ReSukiSU-with-susfs"
-```
-
-**Outputs:**
-- `kernel-zip` — Flashable AnyKernel3 package
-- `manager` — Compiled Manager APK
-- GitHub Release with both artifacts
-
-**Notifications:**
-- Telegram messages for start, success, and failure
-- Build duration, file sizes, commit metadata
-
+Fully automated CI pipeline configured for a specific default target (e.g., Xiaomi Redmi Note 7 Pro `violet`).
+* **Triggers:**
+  * Workflow call (`workflow_call`)
+  * Manual dispatch (`workflow_dispatch`)
+* **Environment Defaults:**
+  ```yaml
+  CLANG_VERSION: "clang-r563880c"
+  KERNEL_SOURCE: "[https://github.com/Justadeayo/android_kernel_xiaomi_violet](https://github.com/Justadeayo/android_kernel_xiaomi_violet)"
+  KERNEL_BRANCH: "sixteen"
+  DEFCONFIG_NAME: "vendor/violet-perf_defconfig"
+  DEVICE_CODENAME: "violet"
+  
+* **Build Execution:**
+  1. Invokes `build-manager.yml` to compile the companion Manager APK.
+  2. Clones the target kernel source and applies `setup.sh` KernelSU patches.
+  3. Appends KSU & SuSFS flags (`CONFIG_KSU=y`, `CONFIG_KSU_SUSFS=y`, `CONFIG_KSU_TAMPER_SYSCALL_TABLE=y`) to defconfig.
+  4. Compiles using LLVM/Clang toolchain and packages output into AnyKernel3 ZIP.
+  5. Sends complete status reports and build artifacts directly to Telegram.
+  
 ---
 
-### 3. **Kernel & Manager Build.yml** — Custom Interactive Builds
-**Path:** `.github/workflows/Kernel_&_Manger_build.yml`
 
-Manual workflow dispatch for building custom kernel + manager combinations. All parameters are user-supplied. Dynamically targets the calling branch for maximum flexibility.
+### 3. `Kernel_&_Manager_build.yml` — Interactive Custom Builds
+**Path:** `.github/workflows/Kernel_&_Manager_build.yml`
+Interactive, manually triggered workflow allowing users to pass arbitrary kernel sources, branches, defconfigs, root solutions, and Clang toolchains directly via GitHub UI.
+* **Triggers:**
+  * Manual dispatch (`workflow_dispatch`)
+* **Input Options:**
 
-**When to use:**
-- Testing different kernel sources and branches
-- Experimenting with different Clang versions
-- Building for multiple devices in one session
-- Custom defconfigs and build configurations
+| Input Field | Type | Options / Description | Default |
+| :--- | :--- | :--- | :--- |
+| `clang_version` | Choice | `clang-3289846` through `clang-r574158`, `clang-stable` | `clang-r563880c` |
+| `kernel_source` | String | Target Git repository URL | `.../android_kernel_xiaomi_violet` |
+| `kernel_branch` | String | Target branch | `sixteen` |
+| `defconfig_name` | String | Relative defconfig path | `vendor/violet-perf_defconfig` |
+| `device_codename` | String | Codename for AnyKernel3 branding | `violet` |
+| `ksu_type` | Choice | `None`, `KernelSU`, `ReSukiSU-with-susfs` | `KernelSU` |
+| `BUILD_COMMIT` | String | Build notes/description | `Synced with upstream changes 💯` |
+| `telegram_chat_id` | String | Optional chat ID override | Secret fallback |
+| `telegram_bot_token` | String | Optional bot token override | Secret fallback |
 
-**Input Parameters:**
-
-| Parameter | Type | Example |
-|-----------|------|---------|
-| `clang_version` | Choice | `clang-r563880c`, `clang-stable`, `clang-r574158`, `clang-r450784e` |
-| `kernel_source` | String | `https://github.com/user/android_kernel_device` |
-| `kernel_branch` | String | `main`, `sixteen`, `custom-branch` |
-| `defconfig_name` | String | `vendor/violet-perf_defconfig` |
-| `device_codename` | String | `violet`, `alioth`, `vayu`, etc. |
-| `ksu_type` | Choice | `None`, `KernelSU`, `ReSukiSU-with-susfs` |
-| `BUILD_COMMIT` | String | Build notes/description (shown in Telegram) |
-| `telegram_chat_id` | String | `-1001234567890` |
-| `telegram_bot_token` | String | `123456:ABC-DEF...` |
-
-**How to trigger:**
-1. Go to **Actions** → **Kernel & Manager Build**
-2. Click **Run workflow**
-3. Fill in all parameters
-4. Click **Run workflow**
-
-**Outputs:**
-- GitHub Release with custom naming
-- Telegram notifications with build parameters and results
-
+* **Advanced Capabilities:**
+  * Integrated **SuSFS 4.14 patch application** when `ReSukiSU-with-susfs` is selected.
+  * Automated GitHub Tag & Release generation upon successful completion (`v3.3.0-<build_num>-beta`).
+  * Instant Telegram log forwarding on compilation failure (`error_logs.zip` with 35-line preview).
+  
 ---
 
-### 4. **release.yml** — Formal Release Publishing
+### 4. `release.yml` — Formal Release Publishing
 **Path:** `.github/workflows/release.yml`
-
-Publishes GitHub Releases with Manager APK and Kernel ZIPs when you push a version tag.
-
-**When to use:**
-- Official KernelSU releases
-- Publishing tagged versions
-
-**How to trigger:**
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-```
-However the recent changes of 19-08-2026 v1.2 implement Releases on every successful sync with upstream which calls both Manager and Kernel Build Process
-> Therefore,
- * Workflow Call
- * Workflow Dispatch (hard-coded)
-
-**Outputs:**
-- GitHub Release with auto-generated release notes
-- Attached artifacts: APK + any available kernel ZIP
-
+Orchestrates full production releases whenever a version tag (e.g., `v1.0.0`) is pushed or when called programmatically.
+* **Triggers:**
+  * Tag Push: `v*`
+  * Workflow call (`workflow_call`)
+  * Manual dispatch (`workflow_dispatch`)
+* **Behavior:**
+  1. Triggers `automated.yml` to produce fresh kernel ZIPs and Manager APKs.
+  2. Calculates incremental build version tags if run manually (e.g., `v3.3.0-<number>`).
+  3. Publishes an official GitHub Release attached with all `.apk` and `.zip` artifacts.
+  
 ---
 
-### 5. **sync.yml** — Upstream Synchronization
+### 5. `sync.yml` — Upstream Synchronization
 **Path:** `.github/workflows/sync.yml`
-
-Periodically syncs your `master` branch with the upstream KernelSU repository, then triggers the automated kernel build if changes are detected. Uses dynamic branch reference for flexibility.
-
-**Schedule:**
-- Runs automatically at: **Interval of 3-days**
-- Manual trigger available
-
-**Behavior:**
-1. Fetches latest upstream changes
-2. If `master` is behind, hard-resets to upstream
-3. Pushes updates to `origin/master`
-4. Sends Telegram notification
-5. Automatically triggers `release.yml` on the this branch
+Keeps your repository in sync with upstream KernelSU updates.
+* **Triggers:**
+  * Scheduled Cron: Every 15 days (`00:30 UTC`)
+  * Manual dispatch (`workflow_dispatch`)
+* **Behavior:**
+  1. Compares local `master` branch against `upstream/master` (or `upstream/main`).
+  2. If upstream updates are found, performs `git reset --hard` and force-pushes to origin `master`.
+  3. Dispatches Telegram notification with upstream commit log.
+  4. Triggers `release.yml` on `Custom-build` branch to initiate automated builds for updated sources.---
+  
+Additional workflows and jobs beyond these five when available would provide extended functionality for build management, testing, and distribution.
 
 ---
 
-**And Others...**
-Additional workflows and jobs beyond these five provide extended functionality for build management, testing, and distribution.
+## 🚀 Quick Start Scenarios
+### Scenario A: Dispatch a Custom Kernel Build
+1. Go to **Actions** → **Kernel & Manager Build**.
+2. Click **Run workflow**.
+3. Fill in your **Kernel Source Repo**, **Branch**, **Defconfig**, and **Device Codename**.
+4. Select your desired **KernelSU Version** (`KernelSU`, `ReSukiSU-with-susfs`, or `None`).
+5. Trigger build and monitor progress in Telegram or Actions logs
+.
+### Scenario B: Trigger Automated Manager Build
+1. Push any commit targeting `manager/` or `userspace/` on supported branches.
+2. Retrieve compiled manager binaries under **Artifacts** → **manager**.
 
----
-
-## Quick Start Scenarios
-
-### Scenario A: I want a quick kernel build for Violet
-**Use:** `automated.yml`
-- Workflow already configured for Violet device
-   * Note: XCalibur Kernel
-- Add your Telegram_ChatID and Telegram_Token for bot in secrets (check below for actual #KEYWORD)
-- Then trigger workflow: **Actions → Automated Build for Violet → Run workflow**
-- Check Telegram for progress and results
-
-### Scenario B: I want to test a different kernel source
-**Use:** `Kernel & Manager Build.yml`
-1. Go to **Actions → Kernel & Manager Build**
-2. Click **Run workflow**
-3. Fill in your custom kernel repo URL, branch, defconfig
-4. Click **Run workflow**
-5. Receive Telegram notification when done
-
-### Scenario C: I only want to rebuild the Manager APK
-**Use:** `build-manager.yml`
-- Automatically triggers on changes to `manager/` or `userspace/`
-- Or manually dispatch if you need a rebuild
-- Find APK in artifacts: `manager`
-- Builds directly from Master branch
-
-### Scenario D: I want to publish an official release
-**Use:** `release.yml`
+### Scenario C: Create an Official Release Tag
 ```bash
-git tag v1.1.0
-git push origin v1.1.0
+git tag v3.3.0
+git push origin v3.3.0
 ```
-- GitHub Release auto-creates with APK and kernel ZIP (if available)
+* `release.yml` will automatically build the full stack and publish a release.
 
-### Scenario E: I want to sync with upstream daily and build
+### Scenario D: I want to sync with upstream daily and build
 **Use:** `sync.yml`
 - Already scheduled 3 times daily
 - Or manually trigger to sync immediately
@@ -198,6 +153,8 @@ git push origin v1.1.0
 ## Build Artifacts & Access
 
 ### Where to find built files:
+**Releases**
+- Only available after a completed successful process, if not use option below
 
 **GitHub UI:**
 1. Go to **Actions** tab
@@ -213,18 +170,20 @@ git push origin v1.1.0
 - `ksud-armv7-linux-androideabi` — ARMv7 ksud binary
 - `mappings` — ProGuard obfuscation mappings (release only)
 
+**Telegram**
+- Happens if the build is absolutely successful and telegram values were correctly included before build start via secrets or input.
 ---
 
 ## Configuration & Secrets
 
-### Required Secrets (for Telegram notifications)
+## 🔐 Required Repository Secrets
+Add the following under **Settings** → **Secrets and variables** → **Actions**:
 
-Add these to **Settings → Secrets and variables → Actions:**
-
-| Secret | Value | Example |
-|--------|-------|---------|
-| `TELEGRAM_BOT_TOKEN` | Telegram bot token | `123456:ABCDEFghijklmnop...` |
-| `TELEGRAM_CHAT_ID` | Target chat ID | `-1001234567890` (for groups, include `-100`) |
+| Secret Name | Description | Example |
+| :--- | :--- | :--- |
+| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token from [@BotFather](https://t.me/botfather) | `123456789:ABCdefGhIJKlm...` |
+| `TELEGRAM_CHAT_ID` | Telegram Chat / Channel ID | `-1001234567890` |
+| `GH_TOKEN` | (Optional) Personal Access Token for cross-repo dispatches | `ghp_xxxxxxxxxxxx` |
 
 **How to get them:**
 1. **Bot Token:** Talk to [@BotFather](https://t.me/botfather) on Telegram
@@ -255,7 +214,7 @@ build-manager.yml
   └─ repack-manager (injects binaries, re-signs APK)
 ```
 
-### Kernel Build Flow (automated.yml / custom-build)
+### Kernel Build Flow
 ```
 1. Clone kernel source
 2. Download AOSP Clang toolchain
@@ -267,21 +226,6 @@ build-manager.yml
 8. Create GitHub Release
 9. Send Telegram notification
 ```
-
----
-
-## Dynamic Branch Reference
-
-These workflows use dynamic branch references (`${{ github.ref_name }}`) for maximum flexibility:
-
-- **Kernel & Manager Build.yml:** Automatically targets the branch that triggered the workflow (no hardcoded branch names)
-- **sync.yml:** Dynamically references the current branch when triggering `automated.yml`
-
-This allows you to:
-- Run workflows from any branch without modification
-- Test on feature branches safely
-- Maintain a single workflow configuration for multiple branches
-
 ---
 
 ## Troubleshooting
@@ -337,7 +281,7 @@ In `automated.yml` or manual workflow, change:
 CLANG_VERSION: "clang-r563880c"  # Change this
 ```
 
-Available versions: `clang-r563880c`, `clang-r574158`, `clang-r450784e`, `clang-stable`
+Available versions: `clang-r563880c`, `clang-r574158`, `clang-r450784e`, `clang-stable`, `and more`
 
 ### Skip specific build steps
 Add conditions to any step:
@@ -441,16 +385,17 @@ For more information, see `LICENSE` in the repository root.
 
 ---
 
-## Version History
+---
+## 📑 Version History
 
 | Version | Date | Notes | Branch |
-|---------|------|-------|--------|
-| 1.2 | 2026-08-19 | Updated Branch to include contain only workflows and fixed GitHub current policy | Custom-build, test |
-| 1.1 | 2026-07-26 | Added custom-build branch support, dynamic references, risk disclaimers | custom-build, test |
-| 1.0 | 2026-07-20 | Initial guide for automated build workflows | test |
-
+| :--- | :--- | :--- | :--- |
+| **1.3** | 2026-09-01 | Extended parameter customization, SuSFS 4.14 patch automation, and hardcode mapping guide | `Custom-build` |
+| **1.2** | 2026-08-19 | Automated upstream synchronization and scheduled release triggers | `Custom-build`, `test` |
+| **1.1** | 2026-07-26 | Dynamic workflow references and interactive dispatch parameters | `Custom-build`, `test` |
+| **1.0** | 2026-07-20 | Initial automated kernel & manager build release | `test` |
 ---
 
-**Last Updated:** 2026-07-26  
+**Last Updated:** 2026-09-01  
 **Primary Branches:** Custom-build  
 **Status:** ⚠️ Testing Phase — Use with Caution and at Your Own Risk

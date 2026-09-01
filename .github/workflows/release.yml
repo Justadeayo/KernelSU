@@ -1,6 +1,9 @@
 name: Release
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
   workflow_call:
 
@@ -22,15 +25,19 @@ jobs:
       - name: Generate and Push Version Tag
         id: version
         run: |
-          OFFSET=35
-          RUN_NUM=${{ github.run_number }}
-          TAG_BUILD=$((OFFSET + RUN_NUM))
-          VERSION_TAG="v3.2.5-${TAG_BUILD}"
-          
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "$VERSION_TAG"
-          git push origin "$VERSION_TAG"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION_TAG="${{ github.ref_name }}"
+          else
+            OFFSET=-28
+            RUN_NUM=${{ github.run_number }}
+            TAG_BUILD=$((OFFSET + RUN_NUM))
+            VERSION_TAG="v3.3.0-${TAG_BUILD}"
+            
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "$VERSION_TAG"
+            git push origin "$VERSION_TAG"
+          fi
 
           echo "TAG_NAME=${VERSION_TAG}" >> $GITHUB_ENV
 
@@ -44,6 +51,7 @@ jobs:
         with:
           tag_name: ${{ env.TAG_NAME }}
           name: Release ${{ env.TAG_NAME }}
+          generate_release_notes: true
           body: |
             * Synced with Upstream Changes.
             * Latest patch included

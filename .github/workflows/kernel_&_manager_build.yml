@@ -318,31 +318,6 @@ jobs:
           path: manager_out/
         continue-on-error: true
 
-      - name: Create Git Tag and GitHub Release
-        run: |
-          REL_NAME="${{ inputs.device_codename }}_${{ inputs.ksu_type }}_$(date +"%Y%m%d_%H%M")"
-          ZIP_FILE="${GITHUB_WORKSPACE}/${ZIP_NAME}.zip"
-          APK_FILE=$(find manager_out/ -type f -name "*.apk" 2>/dev/null | head -n 1)
-          
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -f -a "$REL_NAME" -m "Kernel Build Release $REL_NAME"
-          git push origin "$REL_NAME" --force
-          
-          read -r -d '' CHANGELOG_NOTES << 'EOF' || true
-          * Synced with Upstream Changes.
-          * Latest patch included
-
-
-          ~by Justus26 🎖️ 
-          EOF
-          
-          if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
-            gh release create "$REL_NAME" --title "$REL_NAME" --notes "$CHANGELOG_NOTES" --clobber "${ZIP_FILE}" "${APK_FILE}"
-          else
-            gh release create "$REL_NAME" --title "$REL_NAME" --notes "$CHANGELOG_NOTES" --clobber "${ZIP_FILE}"
-          fi
-
       - name: Upload to Telegram
         run: |
           END_TIME=$(date +%s)
@@ -382,6 +357,40 @@ jobs:
             -d "parse_mode=Markdown" \
             -d "disable_web_page_preview=true" \
             -d "text=${SUCCESS_MSG}"
+            
+      - name: Create Git Tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          OFFSET=-15
+          RUN_NUM=${{ github.run_number }}
+          TAG_BUILD=$((OFFSET + RUN_NUM))
+          TAG_NAME="v3.3.0-${TAG_BUILD}-beta"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git tag -f -a "$TAG_NAME" -m "Kernel Build Release $TAG_NAME"
+          git push origin "$TAG_NAME" --force
+
+          ZIP_FILE=$(find "${GITHUB_WORKSPACE}" -maxdepth 1 -name "*.zip" | head -n 1)
+          APK_FILE=$(find manager_out/ -type f -name "*.apk" 2>/dev/null | head -n 1)
+
+          CHANGELOG_NOTES="* Synced with Upstream Changes.
+          * Latest patch included
+
+          ~by Justus26 🎖️"
+
+          ASSETS=()
+          [ -n "$ZIP_FILE" ] && [ -f "$ZIP_FILE" ] && ASSETS+=("$ZIP_FILE")
+          [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ] && ASSETS+=("$APK_FILE")
+
+          gh release create "$TAG_NAME" "${ASSETS[@]}" \
+            --title "$TAG_NAME" \
+            --notes "$CHANGELOG_NOTES" \
+            --prerelease \
+            --clobber
+          
 
       - name: Send Build Failure Message & Logs
         if: failure()

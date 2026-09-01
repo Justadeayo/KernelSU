@@ -186,6 +186,8 @@ jobs:
           cd AnyKernel3
           sed -i "s/device.name1=.*/device.name1=${{ env.DEVICE_CODENAME }}/" anykernel.sh
           
+          sed -i -E 's/^(kernel\.string=).*/\1by Justus26 🎖️/' anykernel.sh
+          
           CLANG_ROOT="${GITHUB_WORKSPACE}/toolchains/${{ env.CLANG_VERSION }}/bin"
           CLANG_VER=$("${CLANG_ROOT}/clang" --version | head -n1 | sed 's/(https.*//' | sed 's/ version//' | xargs)
           BUILD_DATE=$(date +'%Y-%m-%d %H:%M WAT')
