@@ -246,6 +246,7 @@ jobs:
           
           echo 'CONFIG_LOCALVERSION="-xcalibur-5.4"' >> out/.config
           echo 'CONFIG_LOCALVERSION_AUTO=n' >> out/.config
+          echo "CONFIG_TOUCHSCREEN_FT8719=n" >> out/.config
 
           if [[ "${{ inputs.ksu_type }}" != "None" ]]; then
             echo "CONFIG_KSU=y" >> out/.config
