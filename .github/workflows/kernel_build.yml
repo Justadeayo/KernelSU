@@ -1,4 +1,4 @@
-name: Kernel & Manager Build
+name: Kernel Build (extra)
 
 on:
   workflow_dispatch:
@@ -20,6 +20,7 @@ on:
           - clang-r563880c
           - clang-r574158
           - clang-stable
+        default: "clang-r416183b"
 
       kernel_source:
         description: Kernel Source Repo URL
@@ -73,26 +74,15 @@ env:
   TZ: "Africa/Lagos"
 
 jobs:
-  build-manager:
-    if: ${{ inputs.ksu_type == 'KernelSU' }}
-    uses: Justadeayo/KernelSU/.github/workflows/build-manager.yml@Custom-build
-    with:
-      telegram_chat_id: ${{ inputs.telegram_chat_id }}
-    secrets:
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-
   Kernel_CI:
-    if: always() && !cancelled() && (needs.build-manager.result == 'success' || needs.build-manager.result == 'skipped')
-    needs: build-manager
     runs-on: ubuntu-22.04
     permissions:
-      contents: read
+      contents: write
       actions: read
       checks: read
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -111,6 +101,7 @@ jobs:
           
           echo "TELEGRAM_CHAT_ID=${TG_CHAT}" >> $GITHUB_ENV
           echo "TELEGRAM_BOT_TOKEN=${TG_TOKEN}" >> $GITHUB_ENV
+          echo "GH_TOKEN=${{ github.token }}" >> $GITHUB_ENV
 
       - name: Setup SWAP
         uses: pierotofy/set-swap-space@master
@@ -159,6 +150,7 @@ jobs:
           fi
 
       - name: Send Build Start Message
+        if: ${{ env.TELEGRAM_CHAT_ID != '' && env.TELEGRAM_BOT_TOKEN != '' }}
         run: |
           START_MSG="🛠 *XCalibur Kernel Build Started!*%0A%0A"
           START_MSG+="*Device*: \`${{ inputs.device_codename }}\`%0A"
@@ -171,10 +163,12 @@ jobs:
             -d "disable_web_page_preview=true" \
             -d "text=${START_MSG}"
 
-      - name: Download AOSP Clang
+      - name: Download Toolchains
         run: |
           mkdir -p toolchains/${{ inputs.clang_version }}
           cd toolchains
+          
+          # Download Clang
           if [[ "${{ inputs.clang_version }}" == "clang-r416183b" ]]; then
             git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b.git ${{ inputs.clang_version }}
           else
@@ -187,29 +181,42 @@ jobs:
             tar -xf "${{ inputs.clang_version }}.tar.gz" -C ${{ inputs.clang_version }}
           fi
 
+          # Download LineageOS GCC Cross-Compilers
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git gcc64
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git gcc32
+
       - name: Compile Kernel
         run: |
           CLANG_ROOT="${GITHUB_WORKSPACE}/toolchains/${{ inputs.clang_version }}/bin"
-          export PATH="/usr/lib/ccache:${CLANG_ROOT}:$PATH"
-          export CC="ccache ${CLANG_ROOT}/clang"
-          export CXX="ccache ${CLANG_ROOT}/clang++"
-          export HOSTCC="ccache ${CLANG_ROOT}/clang"
-          export HOSTCXX="ccache ${CLANG_ROOT}/clang++"
+          GCC64_ROOT="${GITHUB_WORKSPACE}/toolchains/gcc64/bin"
+          GCC32_ROOT="${GITHUB_WORKSPACE}/toolchains/gcc32/bin"
+          
+          export PATH="/usr/lib/ccache:${CLANG_ROOT}:${GCC64_ROOT}:${GCC32_ROOT}:$PATH"
+          
+          export KBUILD_BUILD_USER="Justus26"
+          export KBUILD_BUILD_HOST="derpfest.ci"
           export ARCH=arm64
           export SUBARCH=arm64
           export LLVM=1
           export LLVM_IAS=1
+          export CC="ccache ${CLANG_ROOT}/clang"
           export LD="${CLANG_ROOT}/ld.lld"
           export AR="${CLANG_ROOT}/llvm-ar"
+          export AS="${CLANG_ROOT}/llvm-as"
           export NM="${CLANG_ROOT}/llvm-nm"
           export OBJCOPY="${CLANG_ROOT}/llvm-objcopy"
           export OBJDUMP="${CLANG_ROOT}/llvm-objdump"
           export STRIP="${CLANG_ROOT}/llvm-strip"
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          export CROSS_COMPILE=aarch64-linux-android-
+          export CROSS_COMPILE_COMPAT=arm-linux-gnueabi-
+          export CLANG_TRIPLE=aarch64-linux-gnu-
           
           cd kernel
           mkdir -p out
+
+          # Apply O3 optimizations
+          sed -i 's/KBUILD_CFLAGS\s\++= -O2/KBUILD_CFLAGS   += -O3/g' Makefile
+          sed -i 's/LDFLAGS\s\++= -O2/LDFLAGS += -O3/g' Makefile
           
           case "${{ inputs.ksu_type }}" in
             "KernelSU")
@@ -223,37 +230,44 @@ jobs:
               bash setup.sh master
               ;;
           esac
-          
+
           DEFCONFIG="arch/arm64/configs/${{ inputs.defconfig_name }}"
+          make O=out ${{ inputs.defconfig_name }}
+
+          for fragment in vendor/debugfs.config vendor/violet.config; do
+              if [ -f "arch/arm64/configs/$fragment" ]; then
+                  cat "arch/arm64/configs/$fragment" >> out/.config
+              fi
+          done
           
+          echo 'CONFIG_LOCALVERSION="-xcalibur-5.4"' >> out/.config
+          echo 'CONFIG_LOCALVERSION_AUTO=n' >> out/.config
+
           if [[ "${{ inputs.ksu_type }}" != "None" ]]; then
-            echo "CONFIG_KSU=y" >> "$DEFCONFIG"
-            echo "CONFIG_KPROBES=y" >> "$DEFCONFIG"
-            echo "CONFIG_KPROBE_EVENTS=y" >> "$DEFCONFIG"
-            echo "CONFIG_KSU_KPROBE_HOOKS=y" >> "$DEFCONFIG"
-            echo "CONFIG_OVERLAY_FS=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU=y" >> out/.config
+            echo "CONFIG_KPROBES=y" >> out/.config
+            echo "CONFIG_KPROBE_EVENTS=y" >> out/.config
+            echo "CONFIG_KSU_KPROBE_HOOKS=y" >> out/.config
+            echo "CONFIG_OVERLAY_FS=y" >> out/.config
           fi
           
-          # Download and apply SuSFS kernel-level patches for 4.14
           if [[ "${{ inputs.ksu_type }}" == "ReSukiSU-with-susfs" ]]; then
             curl -Lo susfs.patch https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/refs/heads/mainline/Patches/Patch/susfs_patch_to_4.14.patch
             curl -Lo inline.sh https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/refs/heads/mainline/Patches/susfs_inline_hook_patches.sh
             patch -p1 < susfs.patch
             bash inline.sh
-            echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
+            echo "CONFIG_KSU_SUSFS=y" >> out/.config
           fi
-          
-          touch ./.scmversion
-          make O=out ${{ inputs.defconfig_name }}
 
           if [[ "${{ inputs.ksu_type }}" == "KernelSU" ]]; then
             echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE=y" >> out/.config
           fi
 
-          if [[ "${{ inputs.ksu_type }}" != "None" ]]; then
-            make O=out olddefconfig
-          fi
+          echo "Initializing kernel configuration..."
+          make O=out olddefconfig
+          make O=out prepare
           
+          echo "Build configuration complete, starting kernel compilation..."
           set +e
           make -j$(nproc) O=out 2>&1 | tee "${GITHUB_WORKSPACE}/build.log"
           BUILD_STATUS=${PIPESTATUS[0]}
@@ -311,15 +325,8 @@ jobs:
           name: kernel-zip
           path: "*.zip"
 
-      - name: Download compiled Manager APK
-        if: ${{ inputs.ksu_type == 'KernelSU' }}
-        uses: actions/download-artifact@v4
-        with:
-          name: manager
-          path: manager_out/
-        continue-on-error: true
-
-      - name: Send Build Files and Summary via Telegram
+      - name: Upload Zip directly to Telegram
+        if: ${{ env.TELEGRAM_CHAT_ID != '' && env.TELEGRAM_BOT_TOKEN != '' }}
         run: |
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - BUILD_START))
@@ -328,27 +335,7 @@ jobs:
           
           ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
           FILE_SIZE=$(du -sh "$ZIP_FILE" | cut -f1)
-          APK_FILE=$(find manager_out/ -type f -name "*.apk" 2>/dev/null | head -n 1)
-          
-          # Send Manager APK if available
-          if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
-            curl -sX POST -F document=@"${APK_FILE}" \
-              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-              -F "chat_id=${TELEGRAM_CHAT_ID}" \
-              -F "parse_mode=Markdown" \
-              -F "caption=📦 *Manager APK*"
-          fi
 
-          # Send Kernel ZIP document
-          if [ -n "$ZIP_FILE" ] && [ -f "$ZIP_FILE" ]; then
-            curl -sX POST -F document=@"${ZIP_FILE}" \
-              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-              -F "chat_id=${TELEGRAM_CHAT_ID}" \
-              -F "parse_mode=Markdown" \
-              -F "caption=⚡ *Kernel Flashable Zip*"
-          fi
-
-          # Send Summary Message
           SUCCESS_MSG="*=============================*%0A"
           SUCCESS_MSG+="*   X C A L I B U R  -  K E R N E L  *%0A"
           SUCCESS_MSG+="*=============================*%0A"
@@ -363,14 +350,16 @@ jobs:
           SUCCESS_MSG+="*Duration*: \`${MINS}m ${SECS}s\`%0A"
           SUCCESS_MSG+="*Date*: \`$(date +'%Y-%m-%d %H:%M WAT')\`"
 
-          curl -sX POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -d "chat_id=${TELEGRAM_CHAT_ID}" \
-            -d "parse_mode=Markdown" \
-            -d "disable_web_page_preview=true" \
-            -d "text=${SUCCESS_MSG}"
+          if [ -n "$ZIP_FILE" ] && [ -f "$ZIP_FILE" ]; then
+            curl -sX POST -F document=@"${ZIP_FILE}" \
+              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+              -F "chat_id=${TELEGRAM_CHAT_ID}" \
+              -F "parse_mode=Markdown" \
+              -F "caption=${SUCCESS_MSG}"
+          fi
 
       - name: Send Build Failure Message & Logs
-        if: failure()
+        if: ${{ failure() && env.TELEGRAM_CHAT_ID != '' && env.TELEGRAM_BOT_TOKEN != '' }}
         run: |
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - BUILD_START))

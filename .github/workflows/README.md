@@ -18,12 +18,13 @@ If you fork or adapt this repository for your own kernel/device, **you must repl
 
 ---
 ## Overview
-This repository contains five primary GitHub Actions workflows:
+This repository contains six primary GitHub Actions workflows:
 1. **`build-manager.yml`** — Manager App & `ksud` Binaries
 2. **`automated.yml`** — Automated Kernel & Manager CI (Preconfigured target)
 3. **`Kernel_&_Manager_build.yml`** — Custom Interactive Matrix Builds
 4. **`release.yml`** — Formal Tag & Automated Release Publishing
 5. **`sync.yml`** — Upstream Synchronization with Upstream KernelSU
+6. **`kernel.yml`** — Standalone Kernel Build
 ---
 ## Workflows Breakdown
 ### 1. `build-manager.yml` — Manager App & ksud Binaries
@@ -76,10 +77,10 @@ Interactive, manually triggered workflow allowing users to pass arbitrary kernel
 
 | Input Field | Type | Options / Description | Default |
 | :--- | :--- | :--- | :--- |
-| `clang_version` | Choice | `clang-3289846` through `clang-r574158`, `clang-stable` | `clang-r563880c` |
-| `kernel_source` | String | Target Git repository URL | `.../android_kernel_xiaomi_violet` |
-| `kernel_branch` | String | Target branch | `sixteen` |
-| `defconfig_name` | String | Relative defconfig path | `vendor/violet-perf_defconfig` |
+| `clang_version` | Choice | `clang-3289846` through `clang-r574158`, `clang-stable` | *None (Required)* |
+| `kernel_source` | String | Target Git repository URL | `https://github.com/` |
+| `kernel_branch` | String | Target branch | *None (Required)* |
+| `defconfig_name` | String | Relative defconfig path | *None (Required)* |
 | `device_codename` | String | Codename for AnyKernel3 branding | `violet` |
 | `ksu_type` | Choice | `None`, `KernelSU`, `ReSukiSU-with-susfs` | `KernelSU` |
 | `BUILD_COMMIT` | String | Build notes/description | `Synced with upstream changes 💯` |
@@ -88,12 +89,38 @@ Interactive, manually triggered workflow allowing users to pass arbitrary kernel
 
 * **Advanced Capabilities:**
   * Integrated **SuSFS 4.14 patch application** when `ReSukiSU-with-susfs` is selected.
-  * Automated GitHub Tag & Release generation upon successful completion (`v3.3.0-<build_num>-beta`).
+  * Direct delivery of compiled Manager APK and AnyKernel3 flashable ZIP via Telegram.
   * Instant Telegram log forwarding on compilation failure (`error_logs.zip` with 35-line preview).
   
 ---
 
-### 4. `release.yml` — Formal Release Publishing
+### 4. `kernel.yml` — Standalone Kernel Build
+**Path:** `.github/workflows/kernel.yml`
+Standalone, manually triggered workflow designed to build the kernel image and compile an AnyKernel3 zip without building the KernelSU Manager APK.
+* **Triggers:**
+  * Manual dispatch (`workflow_dispatch`)
+* **Input Options:**
+
+| Input Field | Type | Options / Description | Default |
+| :--- | :--- | :--- | :--- |
+| `clang_version` | Choice | `clang-r416183b` through `clang-r574158`, `clang-stable` | `clang-r416183b` |
+| `kernel_source` | String | Target Git repository URL | `.../android_kernel_xiaomi_violet` |
+| `kernel_branch` | String | Target branch | `16.2` |
+| `defconfig_name` | String | Relative defconfig path | `vendor/sdmsteppe-perf_defconfig` |
+| `device_codename` | String | Codename for AnyKernel3 branding | `violet` |
+| `ksu_type` | Choice | `None`, `KernelSU`, `ReSukiSU-with-susfs` | `KernelSU` |
+| `BUILD_COMMIT` | String | Build notes/description | `Synced with upstream changes 💯` |
+| `telegram_chat_id` | String | Optional chat ID override | Secret fallback |
+| `telegram_bot_token` | String | Optional bot token override | Secret fallback |
+
+* **Key Features:**
+  * Dual GCC Toolchain integration (`gcc64` & `gcc32`) alongside Clang for legacy cross-compilation support.
+  * Automatic fragment config appending (`vendor/debugfs.config`, `vendor/violet.config`) and `-O3` optimization overrides.
+  * Direct delivery of the AnyKernel3 flashable ZIP to Telegram upon success.
+  * Automatic failure reporting and `error_logs.zip` attachment on compilation failure.
+---
+
+### 5. `release.yml` — Formal Release Publishing
 **Path:** `.github/workflows/release.yml`
 Orchestrates full production releases whenever a version tag (e.g., `v1.0.0`) is pushed or when called programmatically.
 * **Triggers:**
@@ -107,7 +134,7 @@ Orchestrates full production releases whenever a version tag (e.g., `v1.0.0`) is
   
 ---
 
-### 5. `sync.yml` — Upstream Synchronization
+### 6. `sync.yml` — Upstream Synchronization
 **Path:** `.github/workflows/sync.yml`
 Keeps your repository in sync with upstream KernelSU updates.
 * **Triggers:**
@@ -119,7 +146,7 @@ Keeps your repository in sync with upstream KernelSU updates.
   3. Dispatches Telegram notification with upstream commit log.
   4. Triggers `release.yml` on `Custom-build` branch to initiate automated builds for updated sources.---
   
-Additional workflows and jobs beyond these five when available would provide extended functionality for build management, testing, and distribution.
+Additional workflows and jobs beyond these six when available would provide extended functionality for build management, testing, and distribution.
 
 ---
 
@@ -390,6 +417,7 @@ For more information, see `LICENSE` in the repository root.
 
 | Version | Date | Notes | Branch |
 | :--- | :--- | :--- | :--- |
+| **1.4** | 2026-09-05 | Added kernel.yml for standalone kernel builds & supported `clang-r416183b` for faster build | `Custom-build` |
 | **1.3** | 2026-09-01 | Extended parameter customization, SuSFS 4.14 patch automation, and hardcode mapping guide | `Custom-build` |
 | **1.2** | 2026-08-19 | Automated upstream synchronization and scheduled release triggers | `Custom-build`, `test` |
 | **1.1** | 2026-07-26 | Dynamic workflow references and interactive dispatch parameters | `Custom-build`, `test` |
