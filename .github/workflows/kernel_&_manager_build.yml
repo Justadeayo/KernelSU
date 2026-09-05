@@ -181,13 +181,14 @@ jobs:
           if [[ "${{ inputs.clang_version }}" == "clang-r416183b" ]]; then
             git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b.git ${{ inputs.clang_version }}
           else
-          OLD_TAGS=("clang-r450784e" "clang-r475365b" "clang-r487747c" "clang-r498229b" "clang-r510928")
-          if [[ " ${OLD_TAGS[@]} " =~ " ${{ inputs.clang_version }} " ]]; then
-            curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-14.0.0_r33/${{ inputs.clang_version }}.tar.gz
-          else
-            curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android16-qpr2-release/${{ inputs.clang_version }}.tar.gz
+            OLD_TAGS=("clang-r450784e" "clang-r475365b" "clang-r487747c" "clang-r498229b" "clang-r510928")
+            if [[ " ${OLD_TAGS[@]} " =~ " ${{ inputs.clang_version }} " ]]; then
+              curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-14.0.0_r33/${{ inputs.clang_version }}.tar.gz
+            else
+              curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android16-qpr2-release/${{ inputs.clang_version }}.tar.gz
+            fi
+            tar -xf "${{ inputs.clang_version }}.tar.gz" -C ${{ inputs.clang_version }}
           fi
-          tar -xf "${{ inputs.clang_version }}.tar.gz" -C ${{ inputs.clang_version }}
 
       - name: Compile Kernel
         run: |
