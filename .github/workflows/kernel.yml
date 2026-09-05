@@ -268,9 +268,12 @@ jobs:
             echo "CONFIG_KSU_TAMPER_SYSCALL_TABLE=y" >> out/.config
           fi
 
-          { yes "" 2>/dev/null || true; } | make O=out olddefconfig
-          { yes "" 2>/dev/null || true; } | make O=out syncconfig
+          # Initialize config and prepare build environment
+          echo "Initializing kernel configuration..."
+          make O=out olddefconfig
+          make O=out prepare
           
+          echo "Build configuration complete, starting kernel compilation..."
           set +e
           make -j$(nproc) O=out 2>&1 | tee "${GITHUB_WORKSPACE}/build.log"
           BUILD_STATUS=${PIPESTATUS[0]}
@@ -423,4 +426,3 @@ jobs:
               -d "disable_web_page_preview=true" \
               -d "text=${FAIL_MSG}"
           fi
-          
