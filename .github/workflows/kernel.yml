@@ -3,6 +3,12 @@ name: Kernel Build (main)
 on:
   workflow_dispatch:
     inputs:
+      kernel_name:
+        description: Kernel Name
+        required: true
+        type: string
+        default: "XCalibur"
+
       clang_version:
         description: Type the clang version of ur kernel
         required: true
@@ -38,13 +44,13 @@ on:
         type: string
 
       device_codename:
-        description: Device Codename (e.g. marble, alioth, vayu)
+        description: Device Codename
         required: true
         type: string
         default: "violet"
 
       ksu_type:
-        description: "KernelSU Version"
+        description: KernelSU Version
         required: false
         type: choice
         options:
@@ -54,18 +60,18 @@ on:
         default: KernelSU
 
       BUILD_COMMIT:
-        description: "Any new changes that applies as a build note/commit"
+        description: Any new changes that applies as a build note/commit
         required: true
         type: string
         default: "Synced with upstream changes 💯"
 
       telegram_chat_id:
-        description: "Telegram Chat ID (Optional - defaults to repo secret)"
+        description: Telegram Chat ID
         required: false
         type: string
 
       telegram_bot_token:
-        description: "Telegram Bot Token (Optional - defaults to repo secret)"
+        description: Telegram Bot Token
         required: false
         type: string
 
@@ -150,16 +156,17 @@ jobs:
 
       - name: Send Build Start Message
         run: |
-          START_MSG="🛠 *XCalibur Kernel Build Started!*%0A%0A"
-          START_MSG+="*Device*: \`${{ inputs.device_codename }}\`%0A"
-          START_MSG+="*Root*: \`${{ inputs.ksu_type }}\`%0A"
-          START_MSG+="*Status*: Compilation in progress..."
+          START_MSG="🛠 *${{ inputs.kernel_name }} Kernel Build Started!*
+
+          *Device*: \`${{ inputs.device_codename }}\`
+          *Root*: \`${{ inputs.ksu_type }}\`
+          *Status*: Compilation in progress..."
 
           curl -sX POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
             -d "parse_mode=Markdown" \
             -d "disable_web_page_preview=true" \
-            -d "text=${START_MSG}"
+            --data-urlencode "text=${START_MSG}"
 
       - name: Download AOSP Clang
         run: |
@@ -224,7 +231,6 @@ jobs:
             echo "CONFIG_OVERLAY_FS=y" >> "$DEFCONFIG"
           fi
           
-          # Download and apply SuSFS kernel-level patches for 4.14
           if [[ "${{ inputs.ksu_type }}" == "ReSukiSU-with-susfs" ]]; then
             curl -Lo susfs.patch https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/refs/heads/mainline/Patches/Patch/susfs_patch_to_4.14.patch
             curl -Lo inline.sh https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/refs/heads/mainline/Patches/susfs_inline_hook_patches.sh
@@ -262,19 +268,19 @@ jobs:
           git clone -b master https://github.com/Justadeayo/AnyKernel3.git
           
           if [ -f $BOOT_DIR/Image.gz ]; then
-              cp $BOOT_DIR/Image.gz AnyKernel3/Image.gz
+            cp $BOOT_DIR/Image.gz AnyKernel3/Image.gz
           elif [ -f $BOOT_DIR/Image.gz-dtb ]; then
-              cp $BOOT_DIR/Image.gz-dtb AnyKernel3/Image.gz-dtb
+            cp $BOOT_DIR/Image.gz-dtb AnyKernel3/Image.gz-dtb
           fi
           
           if [ -f $BOOT_DIR/dtb.img ]; then
-              cp $BOOT_DIR/dtb.img AnyKernel3/dtb
+            cp $BOOT_DIR/dtb.img AnyKernel3/dtb
           elif [ -f $BOOT_DIR/dtb ]; then
-              cp $BOOT_DIR/dtb AnyKernel3/dtb
+            cp $BOOT_DIR/dtb AnyKernel3/dtb
           fi
           
           if [ -f $BOOT_DIR/dtbo.img ]; then
-              cp $BOOT_DIR/dtbo.img AnyKernel3/dtbo.img
+            cp $BOOT_DIR/dtbo.img AnyKernel3/dtbo.img
           fi
           
           cd AnyKernel3
@@ -311,7 +317,6 @@ jobs:
           ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
           FILE_SIZE=$(du -sh "$ZIP_FILE" | cut -f1)
 
-          # Send Kernel ZIP document
           if [ -n "$ZIP_FILE" ] && [ -f "$ZIP_FILE" ]; then
             curl -sX POST -F document=@"${ZIP_FILE}" \
               "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
@@ -320,26 +325,27 @@ jobs:
               -F "caption=⚡ *Kernel Flashable Zip*"
           fi
 
-          # Send Summary Message
-          SUCCESS_MSG="*=============================*%0A"
-          SUCCESS_MSG+="*   X C A L I B U R  -  K E R N E L  *%0A"
-          SUCCESS_MSG+="*=============================*%0A"
-          SUCCESS_MSG+="%0A"
-          SUCCESS_MSG+="*Developer*: @Justus26🪖%0A"
-          SUCCESS_MSG+="*Device*: \`${{ inputs.device_codename }}\`%0A"
-          SUCCESS_MSG+="*Linux Ver*: \`${{ env.KERNEL_VER }}\`%0A"
-          SUCCESS_MSG+="*Compiler*: \`${{ inputs.clang_version }}\`%0A"
-          SUCCESS_MSG+="*Root*: \`${{ inputs.ksu_type }}\`%0A"
-          SUCCESS_MSG+="*SUSFS*: \`${{ env.SUSFS_LABEL }}\`%0A"
-          SUCCESS_MSG+="*Size*: \`${FILE_SIZE}\`%0A"
-          SUCCESS_MSG+="*Duration*: \`${MINS}m ${SECS}s\`%0A"
-          SUCCESS_MSG+="*Date*: \`$(date +'%Y-%m-%d %H:%M WAT')\`"
+          K_NAME_UPPER=$(echo "${{ inputs.kernel_name }}" | sed 's/./& /g' | tr '[:lower:]' '[:upper:]')
+
+          SUCCESS_MSG="=============================
+            ${K_NAME_UPPER}  -  K E R N E L
+          =============================
+
+          *Developer*: @Justus26🪖
+          *Device*: \`${{ inputs.device_codename }}\`
+          *Linux Ver*: \`${{ env.KERNEL_VER }}\`
+          *Compiler*: \`${{ inputs.clang_version }}\`
+          *Root*: \`${{ inputs.ksu_type }}\`
+          *SUSFS*: \`${{ env.SUSFS_LABEL }}\`
+          *Size*: \`${FILE_SIZE}\`
+          *Duration*: \`${MINS}m ${SECS}s\`
+          *Date*: \`$(date +'%Y-%m-%d %H:%M WAT')\`"
 
           curl -sX POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
             -d "parse_mode=Markdown" \
             -d "disable_web_page_preview=true" \
-            -d "text=${SUCCESS_MSG}"
+            --data-urlencode "text=${SUCCESS_MSG}"
 
       - name: Send Build Failure Message & Logs
         if: failure()
@@ -372,6 +378,5 @@ jobs:
               -d "chat_id=${TELEGRAM_CHAT_ID}" \
               -d "parse_mode=Markdown" \
               -d "disable_web_page_preview=true" \
-              -d "text=${FAIL_MSG}"
+              --data-urlencode "text=${FAIL_MSG}"
           fi
-          

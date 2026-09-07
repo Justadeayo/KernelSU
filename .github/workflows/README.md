@@ -18,13 +18,14 @@ If you fork or adapt this repository for your own kernel/device, **you must repl
 
 ---
 ## Overview
-This repository contains six primary GitHub Actions workflows:
+This repository contains seven primary GitHub Actions workflows:
 1. **`build-manager.yml`** — Manager App & `ksud` Binaries
 2. **`automated.yml`** — Automated Kernel & Manager CI (Preconfigured target)
 3. **`Kernel_&_Manager_build.yml`** — Custom Interactive Matrix Builds
 4. **`release.yml`** — Formal Tag & Automated Release Publishing
 5. **`sync.yml`** — Upstream Synchronization with Upstream KernelSU
-6. **`kernel.yml`** — Standalone Kernel Build
+6. **`kernel.yml`** — Kernel Build (main standalone build workflow)
+7. **`kernel_build.yml`** — Standalone Kernel Build (extra)
 ---
 ## Workflows Breakdown
 ### 1. `build-manager.yml` — Manager App & ksud Binaries
@@ -57,17 +58,15 @@ Fully automated CI pipeline configured for a specific default target (e.g., Xiao
   KERNEL_BRANCH: "sixteen"
   DEFCONFIG_NAME: "vendor/violet-perf_defconfig"
   DEVICE_CODENAME: "violet"
-  
-* **Build Execution:**
-  1. Invokes `build-manager.yml` to compile the companion Manager APK.
-  2. Clones the target kernel source and applies `setup.sh` KernelSU patches.
-  3. Appends KSU & SuSFS flags (`CONFIG_KSU=y`, `CONFIG_KSU_SUSFS=y`, `CONFIG_KSU_TAMPER_SYSCALL_TABLE=y`) to defconfig.
-  4. Compiles using LLVM/Clang toolchain and packages output into AnyKernel3 ZIP.
-  5. Sends complete status reports and build artifacts directly to Telegram.
+  ```
+  * **Build Execution:**
+    1. Invokes `build-manager.yml` to compile the companion Manager APK.
+    2. Clones the target kernel source and applies `setup.sh` KernelSU patches.
+    3. Appends KSU & SuSFS flags (`CONFIG_KSU=y`, `CONFIG_KSU_SUSFS=y`, `CONFIG_KSU_TAMPER_SYSCALL_TABLE=y`) to defconfig.
+    4. Compiles using LLVM/Clang toolchain and packages output into AnyKernel3 ZIP.
+    5. Sends complete status reports and build artifacts directly to Telegram.
   
 ---
-
-
 ### 3. `Kernel_&_Manager_build.yml` — Interactive Custom Builds
 **Path:** `.github/workflows/Kernel_&_Manager_build.yml`
 Interactive, manually triggered workflow allowing users to pass arbitrary kernel sources, branches, defconfigs, root solutions, and Clang toolchains directly via GitHub UI.
@@ -77,6 +76,7 @@ Interactive, manually triggered workflow allowing users to pass arbitrary kernel
 
 | Input Field | Type | Options / Description | Default |
 | :--- | :--- | :--- | :--- |
+| `kernel_name` | String | Name of the kernel for build banners | `XCalibur` |
 | `clang_version` | Choice | `clang-3289846` through `clang-r574158`, `clang-stable` | *None (Required)* |
 | `kernel_source` | String | Target Git repository URL | `https://github.com/` |
 | `kernel_branch` | String | Target branch | *None (Required)* |
@@ -88,15 +88,16 @@ Interactive, manually triggered workflow allowing users to pass arbitrary kernel
 | `telegram_bot_token` | String | Optional bot token override | Secret fallback |
 
 * **Advanced Capabilities:**
+  * Dynamic `kernel_name` input to customize build headers and notification branding.
+  * Robust URL encoding using `--data-urlencode` for multi-line Telegram payload stability.
   * Integrated **SuSFS 4.14 patch application** when `ReSukiSU-with-susfs` is selected.
   * Direct delivery of compiled Manager APK and AnyKernel3 flashable ZIP via Telegram.
   * Instant Telegram log forwarding on compilation failure (`error_logs.zip` with 35-line preview).
   
 ---
-
-### 4. `kernel.yml` — Standalone Kernel Build
+### 4. `kernel.yml` — Kernel Build (main)
 **Path:** `.github/workflows/kernel.yml`
-Standalone, manually triggered workflow designed to build the kernel image and compile an AnyKernel3 zip without building the KernelSU Manager APK.
+Main standalone, manually triggered workflow designed to build the kernel image and compile an AnyKernel3 zip without building the KernelSU Manager APK.
 * **Triggers:**
   * Manual dispatch (`workflow_dispatch`)
 * **Input Options:**
@@ -119,8 +120,56 @@ Standalone, manually triggered workflow designed to build the kernel image and c
   * Direct delivery of the AnyKernel3 flashable ZIP to Telegram upon success.
   * Automatic failure reporting and `error_logs.zip` attachment on compilation failure.
 ---
-
-### 5. `release.yml` — Formal Release Publishing
+### 5. `kernel_build.yml` — Kernel Build (extra)
+**Path:** `.github/workflows/kernel_build.yml`
+Secondary extra standalone kernel build workflow designed for additional testing setups, alternative matrix setups, or isolated compilation runs without companion manager builds.
+* **Triggers:**
+  * Manual dispatch (`workflow_dispatch`)
+* **Key Features:**
+  * Provides a lightweight extra environment for building custom kernel zips.
+  * Optimized for quick testing iterations alongside the main `kernel.yml` pipeline.
+---
+### 6. `release.yml` — Formal Release Publishing
+**Path:** `.github/workflows/release.yml`
+Orchestrates full production releases whenever a version tag (e.g., `v1.0.0`) is pushed or when called programmatically.
+* **Triggers:**
+  * Tag Push: `v*`
+  * Workflow call (`workflow_call`)
+  * Manual dispatch (`workflow_dispatch`)
+* **Behavior:**
+  1. Triggers `automated.yml` to produce fresh kernel ZIPs and Manager APKs.
+  2. Calculates incremental build version tags if run manually (e.g., `v3.3.0-<number>`).
+  3. Publishes an official GitHub Release attached with all `.apk` and `.zip` artifacts.
+  
+---
+### 7. `sync.yml` — Upstream Synchronization
+**Path:** `.github/workflows/sync.yml`
+Keeps your repository in sync with upstream KernelSU updates.
+* **Triggers:**
+  * Scheduled Cron: Every 15 days (`00:30 UTC`)
+  * Manual dispatch (`workflow_dispatch`)
+* **Behavior:**
+  1. Compares local `master` branch against `upstream/master` (or `upstream/main`).
+  2. If upstream updates are found, performs `git reset --hard` and force-pushes to origin `master`.
+  3. Dispatches Telegram notification with upstream commit log.
+  4. Triggers `release.yml` on `Custom-build` branch to initiate automated builds for updated sources.
+---
+## 🚀 Quick Start Scenarios
+### Scenario A: Dispatch a Custom Kernel Build
+1. Go to **Actions** → **Kernel & Manager Build**.
+2. Click **Run workflow**.
+3. Fill in your **Kernel Name**, **Kernel Source Repo**, **Branch**, **Defconfig**, and **Device Codename**.
+4. Select your desired **KernelSU Version** (`KernelSU`, `ReSukiSU-with-susfs`, or `None`).
+5. Trigger build and monitor progress in Telegram or Actions logs.
+### Scenario B: Trigger Automated Manager Build
+1. Push any commit targeting `manager/` or `userspace/` on supported branches.
+2. Retrieve compiled manager binaries under **Artifacts** → **manager**.
+### Scenario C: Create an Official Release Tag
+```bash
+git tag v3.3.0
+git push origin v3.3.0
+```
+### 6. `release.yml` — Formal Release Publishing
 **Path:** `.github/workflows/release.yml`
 Orchestrates full production releases whenever a version tag (e.g., `v1.0.0`) is pushed or when called programmatically.
 * **Triggers:**
@@ -134,7 +183,7 @@ Orchestrates full production releases whenever a version tag (e.g., `v1.0.0`) is
   
 ---
 
-### 6. `sync.yml` — Upstream Synchronization
+### 7. `sync.yml` — Upstream Synchronization
 **Path:** `.github/workflows/sync.yml`
 Keeps your repository in sync with upstream KernelSU updates.
 * **Triggers:**
@@ -144,9 +193,7 @@ Keeps your repository in sync with upstream KernelSU updates.
   1. Compares local `master` branch against `upstream/master` (or `upstream/main`).
   2. If upstream updates are found, performs `git reset --hard` and force-pushes to origin `master`.
   3. Dispatches Telegram notification with upstream commit log.
-  4. Triggers `release.yml` on `Custom-build` branch to initiate automated builds for updated sources.---
-  
-Additional workflows and jobs beyond these six when available would provide extended functionality for build management, testing, and distribution.
+  4. Triggers `release.yml` on `Custom-build` branch to initiate automated builds for updated sources.
 
 ---
 
@@ -154,10 +201,10 @@ Additional workflows and jobs beyond these six when available would provide exte
 ### Scenario A: Dispatch a Custom Kernel Build
 1. Go to **Actions** → **Kernel & Manager Build**.
 2. Click **Run workflow**.
-3. Fill in your **Kernel Source Repo**, **Branch**, **Defconfig**, and **Device Codename**.
+3. Fill in your **Kernel Name**, **Kernel Source Repo**, **Branch**, **Defconfig**, and **Device Codename**.
 4. Select your desired **KernelSU Version** (`KernelSU`, `ReSukiSU-with-susfs`, or `None`).
-5. Trigger build and monitor progress in Telegram or Actions logs
-.
+5. Trigger build and monitor progress in Telegram or Actions logs.
+
 ### Scenario B: Trigger Automated Manager Build
 1. Push any commit targeting `manager/` or `userspace/` on supported branches.
 2. Retrieve compiled manager binaries under **Artifacts** → **manager**.
@@ -167,8 +214,9 @@ Additional workflows and jobs beyond these six when available would provide exte
 git tag v3.3.0
 git push origin v3.3.0
 ```
-* `release.yml` will automatically build the full stack and publish a release.
-
+ * release.yml will automatically build the full stack and publish a release.
+ 
+ 
 ### Scenario D: I want to sync with upstream daily and build
 **Use:** `sync.yml`
 - Already scheduled 3 times daily
@@ -389,41 +437,43 @@ The workflows here are provided for testing and evaluation purposes. Always veri
 **Issues or improvements?**
 - Report via GitHub Issues with workflow name and error logs
 - Include device info and kernel source details
+- You can also report any issues or feedback directly to my GitHub DM using the following format:
+  ```text
+  [Workflow Issue / Feedback]
+  Workflow Name: <e.g., Kernel_&_Manager_build.yml>
+  Device / Codename: <e.g., Xiaomi Redmi Note 7 Pro / violet>
+  Kernel Source & Branch: <e.g., [https://github.com/](https://github.com/)... / sixteen>
+  Error Description / Logs: <Brief attached details logs or>
+  ```
 - Note: Support is provided on best-effort basis
-
 **Want to add a new workflow?**
 - Follow the naming convention: `workflow-purpose.yml`
 - Document triggers, inputs, and outputs
 - Test on a non-main branch first
 - Ensure dynamic references where applicable
-
 ---
-
 ## Disclaimer
-
 By using these workflows, you acknowledge:
 - ✅ You understand the experimental nature of this branch
 - ✅ You will test thoroughly before production use
 - ✅ You assume all risks and responsibility for outcomes
 - ✅ The authors and maintainers are not liable for any damages
 - ✅ You have read and accepted the `LICENSE`
-
 For more information, see `LICENSE` in the repository root.
-
 ---
-
 ---
 ## 📑 Version History
 
 | Version | Date | Notes | Branch |
 | :--- | :--- | :--- | :--- |
+| **1.5** | 2026-09-07 | Updated workflow count to 7, designated `kernel.yml` as main standalone, added `kernel_build.yml` (extra), updated `Kernel_&_Manager_build.yml` with dynamic `kernel_name` and Telegram `--data-urlencode` payload fixes. | `Custom-build` |
 | **1.4** | 2026-09-05 | Added kernel.yml for standalone kernel builds & supported `clang-r416183b` for faster build | `Custom-build` |
 | **1.3** | 2026-09-01 | Extended parameter customization, SuSFS 4.14 patch automation, and hardcode mapping guide | `Custom-build` |
 | **1.2** | 2026-08-19 | Automated upstream synchronization and scheduled release triggers | `Custom-build`, `test` |
 | **1.1** | 2026-07-26 | Dynamic workflow references and interactive dispatch parameters | `Custom-build`, `test` |
 | **1.0** | 2026-07-20 | Initial automated kernel & manager build release | `test` |
----
 
-**Last Updated:** 2026-09-01  
+---
+**Last Updated:** 2026-09-07  
 **Primary Branches:** Custom-build  
 **Status:** ⚠️ Testing Phase — Use with Caution and at Your Own Risk
